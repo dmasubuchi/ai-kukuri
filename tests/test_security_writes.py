@@ -96,5 +96,23 @@ class LauncherIsolationTests(Base):
         self.assertIn('ワークスペース外', p.stderr)
 
 
+@unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
+class MemoryReadTests(Base):
+    def test_show_refuses_page_and_journal_documents_that_resolve_outside(self):
+        outside = self.base / 'secret.txt'
+        outside.write_text('SECRET-OUTSIDE\n')
+        pages = self.ai / 'knowledge/pages'; journal = self.ai / 'knowledge/journal'
+        pages.mkdir(parents=True); journal.mkdir(parents=True)
+        (pages / 'leak.md').symlink_to(outside)
+        (journal / '2026-03-01.md').symlink_to(outside)
+        for doc in ('page:leak', 'journal:2026-03-01'):
+            p = self.run_tool('kukuri-memory', 'show', doc)
+            self.assertNotEqual(p.returncode, 0, doc)
+            self.assertNotIn('SECRET-OUTSIDE', p.stdout)
+        # search must not index them either
+        p = self.run_tool('kukuri-memory', 'search', 'SECRET-OUTSIDE')
+        self.assertNotIn('SECRET-OUTSIDE', p.stdout)
+
+
 if __name__ == '__main__':
     unittest.main()

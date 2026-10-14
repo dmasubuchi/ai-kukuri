@@ -112,6 +112,11 @@ class PackageTests(Base):
         for path in files:
             self.assertFalse(path.startswith(('tests/', '.github/', '.git/', 'runtime/', 'knowledge/', 'tasks/')), path)
 
+    def test_package_platform_list_includes_every_supported_platform(self):
+        platforms = json.loads((ROOT / 'package.json').read_text())['os']
+        for needed in ('darwin', 'linux', 'win32'):
+            self.assertIn(needed, platforms)
+
     def test_package_cannot_be_published_by_accident(self):
         self.assertTrue(json.loads((ROOT / 'package.json').read_text())['private'])
 

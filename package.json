@@ -26,5 +26,5 @@
     "node": ">=16"
   },
   "keywords": ["ai", "claude-code", "codex", "journal", "wiki", "todo", "knowledge"],
-  "os": ["darwin", "linux"]
+  "os": ["darwin", "linux", "win32"]
 }

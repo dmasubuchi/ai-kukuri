@@ -105,13 +105,16 @@ bin/        kukuri-journal  kukuri-wiki  kukuri-tasks  kukuri-memory  kukuri-pat
 rules/      common.md             the shared, product-independent rules
 skills/     kukuri-journal-wiki  kukuri-recall  kukuri-project
 templates/  AGENTS.md  CLAUDE.md  registry-projects.json  ...
-scripts/    init-workspace.sh     install.sh at the root
-examples/   demo.sh
-docs/       architecture.md  features.md  setup.md  herdr.md  security-and-license.md  roadmap.md  (Japanese)
+locales/ja/ Japanese rules, skills and entry files (init --lang ja)
+scripts/    init_workspace.py (portable)  init-workspace.sh (wrapper)
+examples/   demo.py (portable)  demo.sh (wrapper)
+docs/       architecture.md  features.md  setup.md  herdr.md  security-and-license.md  roadmap.md
+docs/ja/    the same documents in Japanese
+install.sh  install.ps1  package.json (npm package, private)
 tests/
 ```
 
-The documents under `docs/` and the rule/skill texts are written in Japanese for now; English translations are on the [roadmap](docs/roadmap.md).
+The documentation, rules, skills and entry files are English by default; Japanese versions live in `docs/ja/` and `locales/ja/` (`init --lang ja`). The tools' own messages and the headings of generated Wiki pages are still Japanese; localisation is on the [roadmap](docs/roadmap.md).
 
 ## Design promises
 

@@ -294,6 +294,9 @@ def show_document(ai, doc_id, start, length):
         prefix,name=doc_id.split(':',1)
         if Path(name).name!=name: raise ValueError('不正なページID')
         path=ai/'knowledge'/('pages' if prefix=='page' else 'journal')/(name+'.md')
+        real=Path(os.path.realpath(path)); root=Path(os.path.realpath(ai))
+        if path.is_symlink() or not (real==root or root in real.parents):
+            raise ValueError('ワークスペース外へ解決される文書は読みません: ' + doc_id)
         lines=path.read_text(encoding='utf-8').splitlines()
         return {'document':{'id':doc_id,'original':str(path),'authority':'derived_not_original' if prefix=='page' else 'append_only_record'},
                 'lines':[{'line':i+1,'text':lines[i]} for i in range(max(0,start-1),min(len(lines),start-1+length))]}

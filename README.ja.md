@@ -110,7 +110,7 @@ skills/     kukuri-journal-wiki  kukuri-recall  kukuri-project
 templates/  AGENTS.md  CLAUDE.md  registry-projects.json  workspace.gitignore
 scripts/    init-workspace.sh
 examples/   demo.sh
-docs/       architecture.md  features.md  setup.md  herdr.md  security-and-license.md  roadmap.md
+docs/       architecture.md  features.md  setup.md  herdr.md  security-and-license.md  roadmap.md（英語。日本語は docs/ja/）
 tests/
 ```
 

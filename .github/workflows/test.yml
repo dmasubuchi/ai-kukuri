@@ -27,6 +27,15 @@ jobs:
         run: python -B examples/demo.py
       - name: npm launcher
         run: node bin/kukuri-kit.js doctor
+      - name: npm pack, install and run
+        shell: bash
+        run: |
+          npm pack --pack-destination "$RUNNER_TEMP"
+          mkdir "$RUNNER_TEMP/consumer" && cd "$RUNNER_TEMP/consumer"
+          npm init -y > /dev/null
+          npm install "$RUNNER_TEMP"/kukuri-kit-*.tgz
+          npx --no-install kukuri-kit init "$RUNNER_TEMP/ws-npm"
+          test -f "$RUNNER_TEMP/ws-npm/bin/kukuri-journal"
       - name: PowerShell installer (Windows)
         if: runner.os == 'Windows'
         shell: pwsh

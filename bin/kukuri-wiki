@@ -313,6 +313,9 @@ def check(ai):
     problems, stats = [], {'pages': 0, 'confirmed': 0, 'unconfirmed': 0, 'conflict': 0, 'stale': 0, 'legacy_pages': 0, 'needs_migration': 0}
     today = dt.date.today()
     for path in sorted(pages_dir(ai).glob('*.md')):
+        if path.is_symlink() or not journal['real_inside'](ai, path):
+            problems.append('%s: ワークスペース外へ解決されるページは読みません' % path.stem)
+            continue
         page = parse_page(path)
         if page is None:
             stats['legacy_pages'] += 1
@@ -451,7 +454,10 @@ def main():
         elif args.command == 'show':
             if not SLUG.fullmatch(args.slug):
                 raise ValueError('slug は小文字英数字とハイフンです')
-            page = parse_page(pages_dir(AI) / (args.slug + '.md'))
+            target = pages_dir(AI) / (args.slug + '.md')
+            if target.exists() and (target.is_symlink() or not journal['real_inside'](AI, target)):
+                raise ValueError('ワークスペース外へ解決される（シンボリックリンクの）ページは読みません: ' + args.slug)
+            page = parse_page(target)
             if page is not None:
                 page['applied'] = sorted(page['applied'])
             result = page if page is not None else {'error': '新形式のページではありません'}
