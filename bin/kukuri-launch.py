@@ -13,8 +13,11 @@ def is_kukuri_wrapper(path):
         real = Path(path).resolve()
         if (real.parent / 'kukuri-launch.py').exists():
             return True
-        if real.is_file() and real.stat().st_size < 8192:
-            return 'kukuri-launch.py' in real.read_text(encoding='utf-8', errors='ignore')
+        if real.is_file():
+            with real.open('rb') as f:
+                head = f.read(2)
+                if head == b'#!':                      # スクリプトだけを、大きさに関わらず確認する（実行ファイル本体は読まない）
+                    return b'kukuri-launch.py' in head + f.read(4 * 1024 * 1024)
     except OSError:
         pass
     return False

@@ -138,8 +138,8 @@ def replay(refs, title):
 
 def same_page(old, new):
     def claims(p):
-        return sorted((c['key'], c['text'], c['as_of'], c.get('time') or '', c['source'], c['kind'], c['status'])
-                      for c in p['claims'])
+        return sorted((c['key'] or '', c['text'] or '', c['as_of'] or '', c.get('time') or '', c['source'] or '',
+                       c['kind'] or '', c['status'] or '') for c in p['claims'])
     return (claims(old) == claims(new) and list(old['history']) == list(new['history'])
             and set(old['applied']) == set(new['applied']))
 
@@ -166,6 +166,9 @@ def plan(ai, entries=None, report=None):
         path = pages_dir(ai) / (slug + '.md')
         old = None
         if path.exists():
+            if path.is_symlink() or not journal['real_inside'](ai, path):
+                note(slug, refs, 'manual_review', 'シンボリックリンク（またはワークスペース外へ解決される）ページは、読み取りも更新もしない')
+                continue
             old = parse_page(path)
             if old is None:
                 note(slug, refs, 'manual_legacy_page', '既存の自由形式ページは自動更新しない。人が内容を確認して移す')
@@ -182,7 +185,7 @@ def plan(ai, entries=None, report=None):
                      '以前に反映した記録がJournalに揃っていない（%s）。再構成すると、履歴・出典を失うため、ページを変更せず停止する。'
                      'Journalを復元するか、人が内容を確認してください' % ', '.join(lost[:5]) + (' ほか' if len(lost) > 5 else ''))
                 continue
-            foreign = [c['source'] for c in old['claims'] if c['source'] not in known_ids]
+            foreign = [c['source'] or '(出典なし)' for c in old['claims'] if c['source'] not in known_ids]
             if foreign:
                 note(slug, refs, 'manual_review',
                      'Journalに無い出典の主張がある（%s）。手で編集されたページは、自動で再構成しない' % ', '.join(sorted(set(foreign))))
@@ -345,6 +348,10 @@ def run_plan(args, write):
     if args.entry:
         report &= set(args.entry)
     actions, pages = plan(AI, entries, report)
+    if args.date or args.entry:
+        # 絞り込み（--date / --entry）を指定したときは、選んだ記録が宛てるページだけを書く
+        targets = {slug for e, slug, key, text in entry_refs(entries) if e['id'] in report}
+        pages = {slug: page for slug, page in pages.items() if slug in targets}
     result = {'actions': actions, 'written': []}
     if write:
         today = dt.date.today().isoformat()
@@ -379,27 +386,36 @@ def migrate(args):
         journal['one_line']('確認した日付', args.through)
         journal['valid_date'](args.through)
     path = pages_dir(AI) / (args.slug + '.md')
-    old = parse_page(path) if path.exists() else None
-    if old is None:
-        raise ValueError('新形式のページではありません: ' + args.slug)
-    refs = [(e, key, text) for e, slug, key, text in entry_refs(journal['all_entries'](AI)) if slug == args.slug]
-    if not refs:
-        raise ValueError('このページを更新するJournalの記録がありません')
-    new, acts = replay(refs, old['title'])
+
+    def build():
+        if path.is_symlink() or (path.exists() and not journal['real_inside'](AI, path)):
+            raise ValueError('シンボリックリンク（またはワークスペース外へ解決される）ページは移行しません')
+        old = parse_page(path) if path.exists() else None
+        if old is None:
+            raise ValueError('新形式のページではありません: ' + args.slug)
+        refs = [(e, key, text) for e, slug, key, text in entry_refs(journal['all_entries'](AI)) if slug == args.slug]
+        if not refs:
+            raise ValueError('このページを更新するJournalの記録がありません')
+        new, _ = replay(refs, old['title'])
+        return old, new
+
     def brief(p):
         return sorted('%s=%s[%s]' % (c['key'], c['text'], c['status']) for c in p['claims'])
-    result = {'page': args.slug, 'before': brief(old), 'after': brief(new), 'changed': brief(old) != brief(new),
-              'confirmed_through': args.through, 'written': False}
-    if args.write:
-        guard_write(AI, pages_dir(AI) / '.wiki.lock')
-        with open_append(AI, pages_dir(AI) / '.wiki.lock') as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            note = '%s 台帳を移行: Journalの全記録から再構成（人の確認済みの日付: %s）' % (
-                dt.date.today().isoformat(), args.through or '指定なし')
-            new['notes'] = list(old['notes']) + ['(旧版の履歴) ' + h for h in old['history']] + [note]
-            write_page(path, new, dt.date.today().isoformat())
-        result['written'] = True
-    return result
+
+    if not args.write:
+        old, new = build()
+        return {'page': args.slug, 'before': brief(old), 'after': brief(new), 'changed': brief(old) != brief(new),
+                'confirmed_through': args.through, 'written': False}
+    guard_write(AI, pages_dir(AI) / '.wiki.lock')
+    with open_append(AI, pages_dir(AI) / '.wiki.lock') as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX)
+        old, new = build()                       # 読み取り・再構成・書き込みを、同じロックの中で行う
+        note = '%s 台帳を移行: Journalの全記録から再構成（人の確認済みの日付: %s）' % (
+            dt.date.today().isoformat(), args.through or '指定なし')
+        new['notes'] = list(old['notes']) + ['(旧版の履歴) ' + h for h in old['history']] + [note]
+        write_page(path, new, dt.date.today().isoformat())
+    return {'page': args.slug, 'before': brief(old), 'after': brief(new), 'changed': brief(old) != brief(new),
+            'confirmed_through': args.through, 'written': True}
 
 
 def main():

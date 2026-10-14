@@ -231,7 +231,8 @@ class SecurityTests(Base):
         p = subprocess.run([sys.executable, '-B', str(self.ai / 'bin/kukuri-wiki'), 'apply', '--write'],
                            capture_output=True, text=True)
         self.assertEqual(outside.read_text(), original)
-        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertIn('manual_review', p.stdout)
+        self.assertIn('"written": []', p.stdout)
         self.assertTrue((self.ai / 'knowledge/pages/acme-portal.md').is_symlink(), 'link must be left as it was')
 
     def test_symlinked_records_directory_is_refused_for_evidence(self):
@@ -472,6 +473,50 @@ class ReviewRegressionTests(Base):
             self.assertEqual(self.snapshot(), before)
         self.run_tool('kukuri-wiki', 'migrate', 'acme-portal', '--through', '2026-03-02', '--write')
         self.assertNotIn('FORGED', self.snapshot())
+
+    def test_migrate_rebuilds_inside_the_lock_and_keeps_a_concurrent_append(self):
+        import fcntl
+        self.add('decision', 'A', '2026-03-01', '10:00', wiki=['wiki:acme-portal#x = A'])
+        self.old_format_page()
+        lock_path = self.ai / 'knowledge/pages/.wiki.lock'
+        with open(lock_path, 'a') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            proc = subprocess.Popen([sys.executable, '-B', str(self.ai / 'bin/kukuri-wiki'), 'migrate', 'acme-portal', '--write'],
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+            import time
+            time.sleep(1.0)                       # migrate はロックの手前で待っている
+            self.add('decision', 'B', '2026-03-05', '10:00', wiki=['wiki:acme-portal#x = B'])
+            fcntl.flock(lock, fcntl.LOCK_UN)
+        out, err = proc.communicate(timeout=30)
+        self.assertEqual(proc.returncode, 0, err)
+        self.assertIn('[x] B', self.snapshot().split('## 未確認・矛盾')[0])
+
+    def test_a_claim_without_a_source_stops_with_manual_review_not_an_exception(self):
+        self.add('decision', 'A', '2026-03-01', '10:00', wiki=['wiki:acme-portal#x = A'])
+        self.run_tool('kukuri-wiki', 'apply', '--write')
+        path = self.ai / 'knowledge/pages/acme-portal.md'
+        path.write_text(path.read_text().replace(' | source: j-20260301-1000-01', ''))
+        before = path.read_text()
+        plan = self.run_tool('kukuri-wiki', 'apply', '--write')
+        self.assertEqual({a['action'] for a in plan['actions']}, {'manual_review'})
+        self.assertEqual(path.read_text(), before)
+
+    def test_symlinked_journal_or_page_that_resolves_outside_is_never_read(self):
+        outside = Path(self.temp.name).resolve() / 'outside-journal.md'
+        outside.write_text('# 外部\n\n### j-20260301-1000-01 | decision | 10:00\n- 記録者: x\n- 出典: s\n- 種類: 本人の決定\n'
+                           '- 内容: 外部の内容\n- 更新: wiki:acme-portal#x = 外部の値\n')
+        folder = self.ai / 'knowledge/journal'; folder.mkdir(parents=True)
+        (folder / '2026-03-01.md').symlink_to(outside)
+        p = self.run_tool('kukuri-wiki', 'apply', '--write', ok=False)
+        self.assertFalse((self.ai / 'knowledge/pages/acme-portal.md').exists())
+        self.run_tool('kukuri-journal', 'list', ok=False)
+
+    def test_entry_filter_limits_the_pages_that_are_written(self):
+        one = self.add('decision', '1', '2026-03-01', '10:00', wiki=['wiki:page-one#x = 1'])
+        self.add('decision', '2', '2026-03-01', '11:00', wiki=['wiki:page-two#x = 2'])
+        result = self.run_tool('kukuri-wiki', 'apply', '--entry', one, '--write')
+        self.assertEqual(result['written'], ['page-one'])
+        self.assertFalse((self.ai / 'knowledge/pages/page-two.md').exists())
 
 
 if __name__ == '__main__':

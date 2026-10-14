@@ -101,6 +101,26 @@ class LaunchTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('recursive', result.stderr.lower())
 
+    def test_a_large_wrapper_script_of_another_workspace_is_still_recognised(self):
+        (self.root/'runtime/launchers.json').unlink()
+        other = Path(self.temp.name)/'other-large'
+        (other/'bin').mkdir(parents=True)
+        (other/'bin/kukuri-launch.py').write_text('# marker\n')
+        big = other/'bin'/'codex'
+        big.write_text('#!/bin/sh\n' + '# padding\n' * 2000 + 'exec python3 "$(dirname "$0")/kukuri-launch.py" codex "$@"\n')
+        big.chmod(0o755)
+        self.assertGreater(big.stat().st_size, 8192)
+        # the marker file is NOT beside the wrapper here, so recognition must come from its content
+        (other/'bin/kukuri-launch.py').unlink()
+        cli_dir = Path(self.temp.name)/'real-cli-2'
+        cli_dir.mkdir()
+        body = cli_dir/'codex'
+        shutil.copy2(self.tool, body)
+        env = dict(os.environ, PATH=str(other/'bin')+os.pathsep+str(cli_dir)+os.pathsep+os.environ['PATH'])
+        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], env=env, capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['binary'], str(body))
+
 
 if __name__ == '__main__':
     unittest.main()

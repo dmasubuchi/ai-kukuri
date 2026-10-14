@@ -242,6 +242,8 @@ def local_documents(ai):
     rows=[]
     for folder,prefix,kind,authority in [('pages','page','curated-knowledge','derived_not_original'),('journal','journal','journal','append_only_record')]:
         for path in sorted((ai/'knowledge'/folder).glob('*.md')):
+            real=Path(os.path.realpath(path)); root=Path(os.path.realpath(ai))
+            if real!=root and root not in real.parents: continue   # ワークスペース外へ解決される文書は索引に入れない
             text=path.read_text()
             rows.append({'id':prefix+':'+path.stem,'original':str(path),'relative':str(path.relative_to(ai)),
                          'category':kind,'authority':authority,'title':text.splitlines()[0].lstrip('# ') if text else path.stem,

@@ -70,11 +70,13 @@ def day_path(ai, date):
     return journal_dir(ai) / (date + '.md')
 
 
-def parse_file(path):
+def parse_file(path, ai=None):
     """Return entries of one journal file. Free-form text outside entries is ignored (legacy notes allowed)."""
     entries = []
     if not path.exists():
         return entries
+    if ai is not None and not real_inside(ai, path):
+        raise ValueError('ワークスペース外へ解決される記録は読みません: ' + str(path))
     current = None
     lines = path.read_text(encoding='utf-8-sig').splitlines()
     for number, line in enumerate(lines, 1):
@@ -113,10 +115,10 @@ def valid_date(value):
 def all_entries(ai=AI, date=None):
     folder = journal_dir(ai)
     if date:
-        return parse_file(day_path(ai, valid_date(date)))
+        return parse_file(day_path(ai, valid_date(date)), ai)
     rows = []
     for path in sorted(folder.glob('????-??-??.md')):
-        rows.extend(parse_file(path))
+        rows.extend(parse_file(path, ai))
     return rows
 
 
@@ -125,7 +127,7 @@ def find_entry(ai, entry_id):
     if not m:
         raise ValueError('記録IDは j-YYYYMMDD-HHMM-NN の形式です')
     date = '-'.join(m.groups())
-    for e in parse_file(day_path(ai, date)):
+    for e in parse_file(day_path(ai, date), ai):
         if e['id'] == entry_id:
             return e
     raise ValueError('記録が見つかりません: ' + entry_id)
@@ -155,7 +157,7 @@ def add(ai, kind, text, source, author, date, time, wiki, tasks):
     path = guard_write(ai, day_path(ai, date))
     with open_append(ai, folder / '.lock') as lf:
         fcntl.flock(lf, fcntl.LOCK_EX)
-        existing = parse_file(path)
+        existing = parse_file(path, ai)
         stem = 'j-' + date.replace('-', '') + '-' + time.replace(':', '')
         used = [int(e['id'].rsplit('-', 1)[1]) for e in existing if e['id'].startswith(stem + '-')]
         seq = max(used, default=0) + 1
