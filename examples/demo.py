@@ -11,6 +11,10 @@ import tempfile
 
 KIT = Path(__file__).resolve().parents[1]
 
+for _stream in (sys.stdout, sys.stderr):      # Windows consoles default to a legacy code page
+    if hasattr(_stream, 'reconfigure'):
+        _stream.reconfigure(encoding='utf-8')
+
 
 def main(argv):
     ws = Path(argv[0]) if argv else Path(tempfile.mkdtemp()) / 'workspace'
