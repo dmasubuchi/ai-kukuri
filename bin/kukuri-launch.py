@@ -20,9 +20,17 @@ def is_kukuri_wrapper(path):
             return True
         if real.is_file():
             with real.open('rb') as f:
-                head = f.read(2)
-                if head == b'#!':                      # スクリプトだけを、大きさに関わらず確認する（実行ファイル本体は読まない）
-                    return b'kukuri-launch.py' in head + f.read(4 * 1024 * 1024)
+                if f.read(2) == b'#!':                 # スクリプトだけを、大きさに関わらず全体を確認する（実行ファイル本体は読まない）
+                    f.seek(0)
+                    tail = b''
+                    needle = b'kukuri-launch.py'
+                    while True:
+                        chunk = f.read(1024 * 1024)
+                        if not chunk:
+                            break
+                        if needle in tail + chunk:
+                            return True
+                        tail = chunk[-(len(needle) - 1):]
     except OSError:
         pass
     return False

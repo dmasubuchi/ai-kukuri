@@ -35,6 +35,22 @@ class WorkspaceTests(unittest.TestCase):
             self.assertNotEqual(p.returncode, 0)
         return p
 
+    def test_workspace_does_not_get_the_npm_launcher_and_reparse_points_count_as_links(self):
+        ws = self.base / 'ws-js'
+        self.sh(ROOT / 'scripts/init-workspace.sh', ws)
+        self.assertFalse((ws / 'bin/kukuri-kit.js').exists())
+        self.assertTrue((ws / 'bin/kukuri-wiki').exists())
+        sys.path.insert(0, str(ROOT / 'scripts'))
+        try:
+            import init_workspace
+        finally:
+            sys.path.pop(0)
+        from unittest import mock
+        fake = mock.Mock(st_file_attributes=0x400)
+        with mock.patch.object(init_workspace.os, 'lstat', return_value=fake):
+            self.assertTrue(init_workspace.is_link(ws / 'bin'))
+        self.assertFalse(init_workspace.is_link(ws / 'bin'))
+
     def test_init_creates_a_working_workspace_without_touching_the_kit(self):
         ws = self.base / 'my workspace'
         self.sh(ROOT / 'scripts/init-workspace.sh', ws)

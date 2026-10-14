@@ -47,6 +47,20 @@ def parse(argv):
     return mode, lang, Path(target)
 
 
+WORKSPACE_SKIP = {'kukuri-kit.js'}      # package launcher: needs the npm package files, so it is not copied into a workspace
+
+
+def is_link(path):
+    """Symlink, or a Windows junction / other reparse point (is_symlink() is False for junctions)."""
+    if path.is_symlink():
+        return True
+    try:
+        attrs = getattr(os.lstat(str(path)), 'st_file_attributes', 0)
+    except OSError:
+        return False
+    return bool(attrs & 0x400)              # FILE_ATTRIBUTE_REPARSE_POINT
+
+
 def put(src, dest, executable=False):
     """Copy only when the destination does not exist (a dangling symlink counts as existing)."""
     if os.path.lexists(dest):
@@ -83,18 +97,18 @@ def main(argv):
                'runtime', 'runtime/mcp.json', 'runtime/machine.json', 'runtime/claude', 'runtime/claude/skills',
                '.claude', '.agents', '.agents/skills', 'tasks', 'tasks/baseline.json', 'knowledge',
                'knowledge/journal', 'knowledge/pages', 'knowledge/records', 'AGENTS.md', 'CLAUDE.md', '.gitignore']
-    guarded += ['bin/' + p.name for p in (KIT / 'bin').iterdir()]
+    guarded += ['bin/' + p.name for p in (KIT / 'bin').iterdir() if p.name not in WORKSPACE_SKIP]
     for name in skills:
         guarded += ['skills/' + name, 'skills/%s/SKILL.md' % name]
     for rel in guarded:
-        if (target / rel).is_symlink():
+        if is_link(target / rel):
             stop('refusing to write through a symlink: %s' % (target / rel))
 
     for d in ('bin', 'rules', 'skills', 'registry', 'runtime', 'tasks', 'projects', 'input', 'output',
               'knowledge/journal', 'knowledge/pages', 'knowledge/records'):
         (target / d).mkdir(parents=True, exist_ok=True)
     for src in sorted((KIT / 'bin').iterdir()):
-        if src.is_file():
+        if src.is_file() and src.name not in WORKSPACE_SKIP:
             put(src, target / 'bin' / src.name, executable=True)
     put(rules_src / 'common.md', target / 'rules/common.md')
     for name in skills:

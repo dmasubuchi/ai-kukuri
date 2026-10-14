@@ -124,6 +124,23 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['binary'], str(body))
 
+    def test_a_wrapper_over_4mib_is_still_recognised(self):
+        (self.root/'runtime/launchers.json').unlink()
+        other = Path(self.temp.name)/'other-huge'
+        (other/'bin').mkdir(parents=True)
+        huge = other/'bin'/'codex'
+        huge.write_text('#!/bin/sh\n' + '# padding\n' * 500000 + 'exec python3 "$(dirname "$0")/kukuri-launch.py" codex "$@"\n')
+        huge.chmod(0o755)
+        self.assertGreater(huge.stat().st_size, 4 * 1024 * 1024)
+        cli_dir = Path(self.temp.name)/'real-cli-3'
+        cli_dir.mkdir()
+        body = cli_dir/'codex'
+        shutil.copy2(self.tool, body)
+        env = dict(os.environ, PATH=str(other/'bin')+os.pathsep+str(cli_dir)+os.pathsep+os.environ['PATH'])
+        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], env=env, capture_output=True, text=True, encoding='utf-8', timeout=20)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(json.loads(result.stdout)['binary'], str(body))
+
 
 if __name__ == '__main__':
     unittest.main()

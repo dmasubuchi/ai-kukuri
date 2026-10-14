@@ -103,7 +103,7 @@ bin/kukuri-wiki check
 
 ```
 bin/        kukuri-journal  kukuri-wiki  kukuri-tasks  kukuri-memory  kukuri-paths
-            kukuri-launch.py  kukuri-claude  kukuri-codex  kukuri-kit.js（npx用）
+            kukuri-launch.py  kukuri-claude  kukuri-codex
 install.sh  1コマンドの導入。package.json  npmパッケージ（公開前は private）
 rules/      common.md             製品に依存しない共通規約
 skills/     kukuri-journal-wiki  kukuri-recall  kukuri-project
