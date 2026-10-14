@@ -316,6 +316,65 @@ class ReviewRegressionTests(Base):
         self.run_tool('kukuri-journal', 'list', '--date', '../../../outside-journal', ok=False)
         self.run_tool('kukuri-journal', 'evidence', 'j-20260101-0000-01/../../x', ok=False)
 
+    def test_later_same_day_update_of_the_same_kind_supersedes(self):
+        self.add('result', '午前の状態', '2026-03-01', '09:00', wiki=['wiki:acme-portal#status = 午前の状態'])
+        self.add('result', '午後の状態', '2026-03-01', '15:00', wiki=['wiki:acme-portal#status = 午後の状態'])
+        self.add('result', '同時刻より前の古い記録', '2026-03-01', '08:00', wiki=['wiki:acme-portal#status = 朝8時の状態'])
+        plan = self.run_tool('kukuri-wiki', 'apply', '--write')
+        actions = [a['action'] for a in plan['actions']]
+        self.assertEqual(actions.count('supersede'), 1, actions)
+        text = self.snapshot()
+        now = text.split('## 未確認・矛盾')[0]
+        self.assertIn('午後の状態', now)
+        self.assertIn('time: 15:00', now)
+        history = text.split('## 履歴')[1]
+        self.assertIn('午前の状態', history)
+        self.assertIn('古い記録（置換せず）', history)
+        self.assertIn('朝8時の状態', history)
+        self.assertNotIn('朝8時の状態', now)
+        again = self.run_tool('kukuri-wiki', 'apply', '--write')
+        self.assertEqual({a['action'] for a in again['actions']}, {'skip'})
+
+    def old_format_page(self):
+        """a46831a までの版が書いた形式（反映済みの記録の節が無い）。解消済みの候補の記録IDは履歴に残らない。"""
+        (self.ai / 'knowledge/pages/acme-portal.md').write_text(
+            '# acme-portal\n\n<!-- kukuri-wiki:v1 -->\n\n更新: 2026-03-02\n\n種別: Living Wiki\n\n'
+            '## 現在わかっていること\n'
+            '- [x] decided B | as_of: 2026-03-02 | source: j-20260302-1000-01 | kind: decision\n\n'
+            '## 未確認・矛盾\n\n## 履歴\n'
+            '- 2026-03-02 [x] 解消: 旧候補「maybe A」→「decided B」(j-20260302-1000-01)\n')
+
+    def test_old_format_page_is_not_changed_until_the_applied_range_is_declared(self):
+        self.add('observation', 'maybe A', '2026-03-01', '09:00', wiki=['wiki:acme-portal#x = maybe A'])
+        self.add('decision', 'decided B', '2026-03-02', '10:00', wiki=['wiki:acme-portal#x = decided B'])
+        self.old_format_page()
+        before = self.snapshot()
+        plan = self.run_tool('kukuri-wiki', 'apply', '--write')
+        self.assertEqual({a['action'] for a in plan['actions']}, {'migration_required'})
+        self.assertEqual(self.snapshot(), before)
+        self.assertEqual(self.run_tool('kukuri-wiki', 'check')['stats']['needs_migration'], 1)
+        dry = self.run_tool('kukuri-wiki', 'migrate', 'acme-portal', '--through', '2026-03-02')
+        self.assertFalse(dry['written'])
+        self.assertEqual(self.snapshot(), before)
+        done = self.run_tool('kukuri-wiki', 'migrate', 'acme-portal', '--through', '2026-03-02', '--write')
+        self.assertTrue(done['written'])
+        again = self.run_tool('kukuri-wiki', 'apply', '--write')
+        self.assertEqual({a['action'] for a in again['actions']}, {'skip'})
+        now = self.snapshot().split('## 未確認・矛盾')[0]
+        self.assertIn('decided B', now)
+        self.assertEqual(self.run_tool('kukuri-wiki', 'check')['stats']['needs_migration'], 0)
+        self.assertNotIn('maybe A', now)
+
+    def test_entries_after_the_declared_range_are_applied_normally(self):
+        self.add('decision', 'decided B', '2026-03-02', '10:00', wiki=['wiki:acme-portal#x = decided B'])
+        self.old_format_page()
+        self.run_tool('kukuri-wiki', 'migrate', 'acme-portal', '--through', '2026-03-02', '--write')
+        self.add('decision', 'decided C', '2026-03-05', '10:00', wiki=['wiki:acme-portal#x = decided C'])
+        self.run_tool('kukuri-wiki', 'apply', '--write')
+        text = self.snapshot()
+        self.assertIn('decided C', text.split('## 未確認・矛盾')[0])
+        self.assertIn('decided B', text.split('## 履歴')[1])
+
 
 if __name__ == '__main__':
     unittest.main()

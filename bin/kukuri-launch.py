@@ -7,6 +7,19 @@ import shutil
 import sys
 
 
+def is_kukuri_wrapper(path):
+    """このランチャーのラッパー（他のワークスペースのものを含む）か。製品本体としては使わない。"""
+    try:
+        real = Path(path).resolve()
+        if (real.parent / 'kukuri-launch.py').exists():
+            return True
+        if real.is_file() and real.stat().st_size < 8192:
+            return 'kukuri-launch.py' in real.read_text(encoding='utf-8', errors='ignore')
+    except OSError:
+        pass
+    return False
+
+
 def main():
     root = Path(__file__).resolve().parents[1]
     product, *args = sys.argv[1:]
@@ -19,10 +32,10 @@ def main():
     if not binary:
         for entry in os.get_exec_path():
             candidate = shutil.which(product, path=entry or os.curdir)
-            if candidate and Path(candidate).resolve() not in wrappers:
+            if candidate and Path(candidate).resolve() not in wrappers and not is_kukuri_wrapper(candidate):
                 binary = str(Path(candidate).absolute())
                 break
-    if binary and Path(binary).resolve() in wrappers:
+    if binary and (Path(binary).resolve() in wrappers or is_kukuri_wrapper(binary)):
         raise ValueError('Recursive CLI target: set runtime/launchers.json to the CLI body')
     if binary and not Path(binary).is_absolute():
         raise ValueError('CLI body path must be absolute: ' + product)

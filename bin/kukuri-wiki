@@ -62,12 +62,14 @@ def parse_page(path):
             if not m:
                 continue
             parts = [p.strip() for p in m.group(2).split(' | ')]
-            claim = {'key': m.group(1), 'text': parts[0], 'as_of': None, 'source': None, 'kind': None,
+            claim = {'key': m.group(1), 'text': parts[0], 'as_of': None, 'time': None, 'source': None, 'kind': None,
                      'status': '確定' if section == SEC_NOW else '未確認'}
             for p in parts[1:]:
                 k, _, v = p.partition(':')
                 k, v = k.strip(), v.strip()
-                if k in ('as_of', 'source', 'kind'):
+                if k == 'time':
+                    claim['time'] = v
+                elif k in ('as_of', 'source', 'kind'):
                     claim[k] = v
                 elif k == '状態':
                     claim['status'] = v
@@ -76,6 +78,7 @@ def parse_page(path):
             page['history'].append(line[2:])
         elif section == SEC_APPLIED and line.startswith('- '):
             page['applied'].add(line[2:].strip())
+    page['ledger'] = has_applied
     if not has_applied:
         # 反映済みの記録の節が無い旧ページ: 確定・未確認の出典と、履歴の [key] と記録IDから復元する
         for c in page['claims']:
@@ -94,6 +97,8 @@ def render(page, today):
            '種別: Living Wiki（現在分かっていること）。過去の経緯は knowledge/journal、これからの仕事は tasks。', '']
     def line(c):
         s = '- [%s] %s | as_of: %s | source: %s | kind: %s' % (c['key'], clean(c['text']), c['as_of'], c['source'], c['kind'])
+        if c.get('time'):
+            s += ' | time: ' + c['time']
         if c['status'] not in ('確定',):
             s += ' | 状態: ' + c['status']
         return s
@@ -135,6 +140,11 @@ def plan(ai, entries):
             actions.append({'entry': e['id'], 'page': slug, 'key': key, 'action': 'manual_legacy_page',
                             'reason': '既存の自由形式ページは自動更新しない'})
             continue
+        if not page.get('new') and not page.get('ledger') and (page['claims'] or page['history']):
+            actions.append({'entry': e['id'], 'page': slug, 'key': key, 'action': 'migration_required',
+                            'reason': '反映済みの記録の台帳が無い旧版のページ。解消済みの候補の記録IDは復元できない。'
+                                      'kukuri-wiki migrate %s --through <最後に反映した日付> --write で、反映済みの範囲を明示してから更新する' % slug})
+            continue
         act = decide(page, e, key, text)
         act.update(entry=e['id'], page=slug, key=key)
         actions.append(act)
@@ -160,7 +170,14 @@ def decide(page, e, key, text):
             return {'action': 'skip', 'reason': '確定済みの内容の再言及（提案・観察・古い記録）は、根拠を置き換えない'}
         newer = e['date'] > c['as_of']
         owner_over = e['kind'] == 'decision' and c['kind'] != 'decision' and e['date'] >= c['as_of']
-        if confirms and (newer or owner_over):
+        # 同じ日でも、同じ種類（決定どうし・結果どうし）の、より遅い時刻の記録は、更新として扱う
+        same_day_later = (e['date'] == c['as_of'] and e['kind'] == c['kind'] and bool(c.get('time'))
+                          and e['time'] > c['time'])
+        older = (e['date'] < c['as_of']) or (e['date'] == c['as_of'] and bool(c.get('time')) and e['time'] < c['time'])
+        if older and not owner_over:
+            return {'action': 'note_older', 'reason': '確定済みの記述より古い記録のため置換しない（履歴に、出典つきで記録する）',
+                    'old': c['text'], 'old_source': c['source'], 'old_as_of': c['as_of']}
+        if confirms and (newer or owner_over or same_day_later):
             return {'action': 'supersede', 'reason': '後日の決定・結果で置換（旧記述は履歴に出典つきで保持）',
                     'old': c['text'], 'old_source': c['source'], 'old_as_of': c['as_of']}
         return {'action': 'conflict', 'reason': '日付または種類で優劣を決められないため、両方を未確認として保持',
@@ -179,7 +196,8 @@ def apply_action(page, e, key, text, act):
     a = act['action']
     if a not in ('skip', 'manual_legacy_page'):
         page['applied'].add('%s#%s' % (e['id'], key))
-    new = {'key': key, 'text': text, 'as_of': e['date'], 'source': e['id'], 'kind': e['kind'], 'status': '確定'}
+    new = {'key': key, 'text': text, 'as_of': e['date'], 'time': e['time'], 'source': e['id'], 'kind': e['kind'],
+           'status': '確定'}
     if a == 'add':
         page['claims'].append(new)
     elif a == 'add_unconfirmed':
@@ -187,7 +205,7 @@ def apply_action(page, e, key, text, act):
     elif a == 'refresh':
         for c in page['claims']:
             if c['key'] == key and c['status'] == '確定':
-                c.update(as_of=e['date'], source=e['id'], kind=e['kind'])
+                c.update(as_of=e['date'], time=e['time'], source=e['id'], kind=e['kind'])
         page['history'].append('%s [%s] 再確認: %s（%s）' % (e['date'], key, clean(text), e['id']))
     elif a == 'supersede':
         page['claims'] = [c for c in page['claims'] if not (c['key'] == key and c['status'] == '確定')]
@@ -201,6 +219,9 @@ def apply_action(page, e, key, text, act):
         new['status'] = '競合'; page['claims'].append(new)
         page['history'].append('%s [%s] 競合: 「%s」(%s) と「%s」(%s) を未確認として保持' % (
             e['date'], key, clean(act['old']), act['old_source'], clean(text), e['id']))
+    elif a == 'note_older':
+        page['history'].append('%s [%s] 古い記録（置換せず）: 「%s」(%s)。確定済みは「%s」(%s, %s)' % (
+            e['date'], key, clean(text), e['id'], clean(act['old']), act['old_as_of'], act['old_source']))
     elif a == 'conflict_add':
         new['status'] = '未確認'; page['claims'].append(new)
     elif a == 'resolve':
@@ -214,7 +235,7 @@ def apply_action(page, e, key, text, act):
 
 
 def check(ai):
-    problems, stats = [], {'pages': 0, 'confirmed': 0, 'unconfirmed': 0, 'conflict': 0, 'stale': 0, 'legacy_pages': 0}
+    problems, stats = [], {'pages': 0, 'confirmed': 0, 'unconfirmed': 0, 'conflict': 0, 'stale': 0, 'legacy_pages': 0, 'needs_migration': 0}
     today = dt.date.today()
     for path in sorted(pages_dir(ai).glob('*.md')):
         page = parse_page(path)
@@ -222,6 +243,8 @@ def check(ai):
             stats['legacy_pages'] += 1
             continue
         stats['pages'] += 1
+        if not page.get('ledger') and (page['claims'] or page['history']):
+            stats['needs_migration'] += 1
         for c in page['claims']:
             where = '%s#%s' % (path.stem, c['key'])
             if not c['as_of'] or not re.match(r'^\d{4}-\d{2}-\d{2}$', c['as_of']):
@@ -256,7 +279,7 @@ def run_plan(args, write):
     result = {'actions': actions, 'written': []}
     if write:
         today = dt.date.today().isoformat()
-        touched = {a['page'] for a in actions if a['action'] not in ('skip', 'manual_legacy_page')}
+        touched = {a['page'] for a in actions if a['action'] not in ('skip', 'manual_legacy_page', 'migration_required')}
         for slug in sorted(touched):                    # 先に全ページの書き込み先を確認する
             guard_write(AI, pages_dir(AI) / (slug + '.md'))
         pages_dir(AI).mkdir(parents=True, exist_ok=True)
@@ -276,6 +299,42 @@ def run_plan(args, write):
     return result
 
 
+def migrate(args):
+    """台帳の無い旧版ページに、反映済みの範囲を明示して台帳を付ける（人が日付を決める）。"""
+    if not SLUG.fullmatch(args.slug):
+        raise ValueError('slug は小文字英数字とハイフンです')
+    through = journal['valid_date'](args.through)
+    path = pages_dir(AI) / (args.slug + '.md')
+    page = parse_page(path) if path.exists() else None
+    if page is None:
+        raise ValueError('新形式のページではありません: ' + args.slug)
+    marked = []
+    for e, slug, key, _ in entry_refs(journal['all_entries'](AI)):
+        if slug == args.slug and e['date'] <= through:
+            marked.append('%s#%s' % (e['id'], key))
+    result = {'page': args.slug, 'through': through, 'mark_as_applied': sorted(set(marked) - page['applied']),
+              'already_applied': len(set(marked) & page['applied']), 'written': False}
+    if args.write:
+        guard_write(AI, pages_dir(AI) / '.wiki.lock')
+        with open_append(AI, pages_dir(AI) / '.wiki.lock') as lock:
+            fcntl.flock(lock, fcntl.LOCK_EX)
+            page = parse_page(path)
+            page['applied'] |= set(marked)
+            page['history'].append('%s 台帳を移行: %s までの記録を反映済みとして明示（人の確認）' % (dt.date.today().isoformat(), through))
+            target = guard_write(AI, path)
+            temporary = target.with_name('.%s.%d.%s.tmp' % (target.name, os.getpid(), uuid.uuid4().hex[:8]))
+            fd = os.open(str(temporary), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as out:
+                    out.write(render(page, dt.date.today().isoformat()))
+                os.replace(temporary, target)
+            finally:
+                if temporary.exists():
+                    temporary.unlink()
+        result['written'] = True
+    return result
+
+
 def main():
     ap = argparse.ArgumentParser(description='Living Wiki (what is known now)')
     sub = ap.add_subparsers(dest='command', required=True)
@@ -285,6 +344,7 @@ def main():
         if name == 'apply':
             p.add_argument('--write', action='store_true', help='指定しない限り何も書かない')
     s = sub.add_parser('show'); s.add_argument('slug')
+    m = sub.add_parser('migrate'); m.add_argument('slug'); m.add_argument('--through', required=True); m.add_argument('--write', action='store_true')
     sub.add_parser('check')
     args = ap.parse_args()
     try:
@@ -298,6 +358,8 @@ def main():
                     result = run_plan(args, write=True)
             else:
                 result = run_plan(args, write=False)
+        elif args.command == 'migrate':
+            result = migrate(args)
         elif args.command == 'show':
             if not SLUG.fullmatch(args.slug):
                 raise ValueError('slug は小文字英数字とハイフンです')

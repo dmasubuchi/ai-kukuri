@@ -73,6 +73,34 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['binary'], str(body))
 
+    def test_wrappers_of_other_workspaces_on_path_are_never_used_as_the_cli_body(self):
+        (self.root/'runtime/launchers.json').unlink()
+        other = Path(self.temp.name)/'other workspace'
+        (other/'bin').mkdir(parents=True)
+        for name in ('kukuri-launch.py', 'codex'):
+            shutil.copy2(ROOT/'bin'/('kukuri-codex' if name == 'codex' else name), other/'bin'/name)
+        # the other workspace's wrapper is named "codex" and is first on PATH
+        cli_dir = Path(self.temp.name)/'real-cli'
+        cli_dir.mkdir()
+        body = cli_dir/'codex'
+        shutil.copy2(self.tool, body)
+        env = dict(os.environ, PATH=str(other/'bin')+os.pathsep+str(cli_dir)+os.pathsep+os.environ['PATH'])
+        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], env=env, capture_output=True, text=True, timeout=5)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        data = json.loads(result.stdout)
+        self.assertEqual(data['binary'], str(body))
+        self.assertEqual(data['root'], str(self.root))
+
+    def test_explicit_setting_pointing_to_another_workspaces_wrapper_is_refused(self):
+        other = Path(self.temp.name)/'other2'
+        (other/'bin').mkdir(parents=True)
+        shutil.copy2(ROOT/'bin/kukuri-launch.py', other/'bin/kukuri-launch.py')
+        shutil.copy2(ROOT/'bin/kukuri-codex', other/'bin/codex')
+        (self.root/'runtime/launchers.json').write_text(json.dumps({'codex': str(other/'bin/codex')}))
+        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], capture_output=True, text=True, timeout=5)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('recursive', result.stderr.lower())
+
 
 if __name__ == '__main__':
     unittest.main()
