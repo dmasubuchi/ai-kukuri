@@ -1,4 +1,6 @@
 """Writes must never resolve outside the workspace (symlinked data directories)."""
+import hashlib
+import os
 import json
 from pathlib import Path
 import shutil
@@ -112,6 +114,44 @@ class MemoryReadTests(Base):
         # search must not index them either
         p = self.run_tool('kukuri-memory', 'search', 'SECRET-OUTSIDE')
         self.assertNotIn('SECRET-OUTSIDE', p.stdout)
+
+
+class VerifyReadTests(Base):
+    def _import(self):
+        notes = self.base / 'notes'; notes.mkdir()
+        (notes / 'a.md').write_text('# memo\nbody\n', encoding='utf-8')
+        (self.ai / 'registry').mkdir()
+        (self.ai / 'registry/knowledge-sources.json').write_text(
+            json.dumps({'sources': [{'id': 'notes', 'root': str(notes)}]}), encoding='utf-8')
+        self.assertEqual(self.run_tool('kukuri-memory', 'import').returncode, 0)
+
+    def test_verify_does_not_accept_a_snapshot_that_resolves_outside(self):
+        self._import()
+        self.assertEqual(self.run_tool('kukuri-memory', 'verify').returncode, 0)
+        current = json.loads((self.ai / 'knowledge/current.json').read_text(encoding='utf-8'))
+        manifest = self.ai / current['run'] / 'manifest.jsonl'
+        rows = [json.loads(l) for l in manifest.read_text(encoding='utf-8').splitlines()]
+        row = next(r for r in rows if r['status'] == 'imported')
+        outside = self.base / 'outside-copy.txt'
+        outside.write_bytes((self.ai / row['snapshot']).read_bytes())      # same bytes, same hash
+        row['snapshot'] = os.path.relpath(outside, self.ai)
+        manifest.write_text('\n'.join(json.dumps(r, ensure_ascii=False) for r in rows) + '\n', encoding='utf-8')
+        p = self.run_tool('kukuri-memory', 'verify')
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertIn('ワークスペース外', p.stdout)
+
+    def test_verify_does_not_accept_review_evidence_outside_the_workspace(self):
+        self._import()
+        outside = self.base / 'outside-evidence.txt'
+        outside.write_text('line\n', encoding='utf-8')
+        (self.ai / 'tasks').mkdir(exist_ok=True)
+        (self.ai / 'tasks/reviewed.json').write_text(json.dumps({'items': [{
+            'id': 'r1', 'evidence': [{'snapshot': os.path.relpath(outside, self.ai),
+                                       'sha256': hashlib.sha256(outside.read_bytes()).hexdigest(),
+                                       'line': 1, 'quote': 'line'}]}]}), encoding='utf-8')
+        p = self.run_tool('kukuri-memory', 'verify')
+        self.assertNotEqual(p.returncode, 0, p.stdout)
+        self.assertIn('review_evidence_unreadable', p.stdout)
 
 
 if __name__ == '__main__':

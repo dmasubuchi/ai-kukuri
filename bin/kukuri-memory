@@ -369,6 +369,7 @@ def verify(ai, original=False):
         if row['status']!='imported':
             continue
         try:
+            guard(ai/row['snapshot'], ai)          # 保存済みの写しは、ワークスペースの中のものだけを読む
             if hashlib.sha256((ai/row['snapshot']).read_bytes()).hexdigest()!=row['sha256']:
                 errors.append({'id':row['id'],'error':'snapshot_hash_mismatch'})
             if row['id'] not in ids:
@@ -378,7 +379,7 @@ def verify(ai, original=False):
                 if hashlib.sha256(Path(row['original']).read_bytes()).hexdigest()!=row['sha256']:
                     errors.append({'id':row['id'],'error':'original_changed_since_import'})
             checked+=1
-        except OSError as error:
+        except (OSError, ValueError) as error:
             errors.append({'id':row['id'],'error':str(error)})
     documents = {r['id']:r for r in rows if r['status']=='imported'}
     tasks = read_tasks(ai)
@@ -400,11 +401,16 @@ def verify(ai, original=False):
         if path.exists():
             for item in json.loads(path.read_text(encoding='utf-8'))[collection]:
                 for reference in item.get('evidence',[]):
-                    data=(ai/reference['snapshot']).read_bytes()
+                    review_count+=1
+                    try:
+                        guard(ai/reference['snapshot'], ai)
+                        data=(ai/reference['snapshot']).read_bytes()
+                    except (OSError, ValueError) as error:
+                        errors.append({'id':item['id'],'error':'review_evidence_unreadable: '+str(error)})
+                        continue
                     lines=data.decode('utf-8-sig').splitlines()
                     if hashlib.sha256(data).hexdigest()!=reference['sha256'] or reference['line']>len(lines) or lines[reference['line']-1]!=reference['quote']:
                         errors.append({'id':item['id'],'error':'review_evidence_mismatch'})
-                    review_count+=1
     return {'documents_checked':checked, 'originals_checked':originals, 'task_rows_checked':len(tasks), 'review_evidence_checked':review_count, 'errors':errors}
 
 
