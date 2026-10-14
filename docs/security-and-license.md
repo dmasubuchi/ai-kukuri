@@ -21,6 +21,7 @@ Status: **pre-publication review in progress** (private candidate). What has bee
 - Read arguments (date, slug, record ID) are strictly validated for format and never read outside the intended directory.
 - Concurrent Wiki updates are performed inside a lock.
 - Originals are not modified. When an import source is missing, the current index is not replaced.
+- Evidence files cited by a TODO and the stored copies read by `kukuri-memory show` must resolve inside the workspace; Journal and Wiki pages that resolve outside are never read, shown or indexed.
 
 ## 3. License
 

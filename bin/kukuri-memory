@@ -58,6 +58,7 @@ def load_rows(path):
 
 
 def read_document(ai, row):
+    guard(ai/row['snapshot'], ai)
     return (ai/row['snapshot']).read_bytes().decode(row.get('encoding','utf-8-sig'))
 
 

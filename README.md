@@ -10,7 +10,7 @@
 
 A small, local toolkit that lets several AIs (Claude Code, Codex and others) record their daily work, keep the history of how things came to be, and update current knowledge and TODOs from it, with sources. No services, no daemon: Python 3 standard library and plain files only.
 
-> Status: **v0.1 candidate (private, not published)**. What is implemented and what is only an idea are listed separately in [docs/features.md](docs/features.md) (Japanese).
+> Status: **v0.1 candidate (private, not published)**. What is implemented and what is only an idea are listed separately in [docs/features.md](docs/features.md).
 
 ## The name — KUKURI (Kukuri-hime-no-kami)
 

@@ -273,6 +273,16 @@ class SecurityTests(Base):
         self.run_tool('kukuri-tasks', 'add', '--file', str(proposal), ok=False)
         self.assertEqual(outside.read_text(), 'ORIGINAL\n')
 
+    def test_task_evidence_cannot_point_outside_the_workspace(self):
+        outside = Path(self.temp.name).resolve() / 'outside-evidence.txt'
+        outside.write_text('line one\n')
+        digest = hashlib.sha256(outside.read_bytes()).hexdigest()
+        rel = os.path.relpath(outside, self.ai)
+        proposal = self.ai / 'proposal.json'
+        proposal.write_text(json.dumps({'title': 'x', 'evidence': [
+            {'snapshot': rel, 'sha256': digest, 'line': 1, 'quote': 'line one'}]}))
+        self.run_tool('kukuri-tasks', 'add', '--file', str(proposal), ok=False)
+
 
 class ReviewRegressionTests(Base):
     """独立レビューで再現した問題の回帰試験。"""

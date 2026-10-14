@@ -76,6 +76,8 @@ def evidence(ai, entries):
             path = row.get('snapshot') or row.get('path')
             if not path:
                 raise ValueError('原本または保存済み原文が必要です')
+            if not real_inside(ai, ai/path):
+                raise ValueError('根拠の原文は、ワークスペースの中にあるものだけ使えます')
             data = (ai/path).read_bytes()
             lines = data.decode('utf-8-sig').splitlines()
             line = row.get('line',0)
