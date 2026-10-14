@@ -162,30 +162,33 @@ def decide(page, e, key, text):
     if not current:
         return {'action': 'add' if confirms else 'add_unconfirmed',
                 'reason': '新しい事実' if confirms else '提案・観察・依頼は確定扱いにせず未確認として追加'}
+    es = (e['date'], e['time'])                      # 記録の日時。日付だけでなく時刻まで比べる
     if confirmed:
         c = confirmed[0]
+        cs = (c['as_of'] or '', c.get('time') or '')
+        old = {'old': c['text'], 'old_source': c['source'], 'old_as_of': c['as_of']}
         if norm(c['text']) == norm(text):
-            if confirms and e['date'] > c['as_of']:
-                return {'action': 'refresh', 'reason': 'より新しい決定・結果で同じ内容を再確認'}
+            if confirms and es > cs:
+                return {'action': 'refresh', 'reason': 'より新しい決定・結果で同じ内容を再確認（日時を更新）'}
             return {'action': 'skip', 'reason': '確定済みの内容の再言及（提案・観察・古い記録）は、根拠を置き換えない'}
-        newer = e['date'] > c['as_of']
-        owner_over = e['kind'] == 'decision' and c['kind'] != 'decision' and e['date'] >= c['as_of']
+        owner_over = e['kind'] == 'decision' and c['kind'] != 'decision' and es >= cs
+        if es < cs:
+            return {'action': 'note_older', 'reason': '確定済みの記述より古い記録のため置換しない（履歴に、出典つきで記録する）', **old}
+        date_newer = e['date'] > (c['as_of'] or '')
         # 同じ日でも、同じ種類（決定どうし・結果どうし）の、より遅い時刻の記録は、更新として扱う
         same_day_later = (e['date'] == c['as_of'] and e['kind'] == c['kind'] and bool(c.get('time'))
                           and e['time'] > c['time'])
-        older = (e['date'] < c['as_of']) or (e['date'] == c['as_of'] and bool(c.get('time')) and e['time'] < c['time'])
-        if older and not owner_over:
-            return {'action': 'note_older', 'reason': '確定済みの記述より古い記録のため置換しない（履歴に、出典つきで記録する）',
-                    'old': c['text'], 'old_source': c['source'], 'old_as_of': c['as_of']}
-        if confirms and (newer or owner_over or same_day_later):
-            return {'action': 'supersede', 'reason': '後日の決定・結果で置換（旧記述は履歴に出典つきで保持）',
-                    'old': c['text'], 'old_source': c['source'], 'old_as_of': c['as_of']}
-        return {'action': 'conflict', 'reason': '日付または種類で優劣を決められないため、両方を未確認として保持',
-                'old': c['text'], 'old_source': c['source'], 'old_as_of': c['as_of']}
-    latest = max(c['as_of'] or '' for c in opened)
-    if confirms and e['date'] >= latest:
+        if confirms and (date_newer or owner_over or same_day_later):
+            return {'action': 'supersede', 'reason': '後日の決定・結果で置換（旧記述は履歴に出典つきで保持）', **old}
+        return {'action': 'conflict', 'reason': '日付または種類で優劣を決められないため、両方を未確認として保持', **old}
+    latest = max((c['as_of'] or '', c.get('time') or '') for c in opened)
+    if confirms and es >= latest:
         return {'action': 'resolve', 'reason': '決定・結果で未確認事項を解消（旧候補は履歴に保持）',
                 'old': ' / '.join(c['text'] for c in opened)}
+    if confirms and es < latest:
+        newest = max(opened, key=lambda c: (c['as_of'] or '', c.get('time') or ''))
+        return {'action': 'note_older', 'reason': '未確認事項より古い決定・結果のため、解消に使わない（履歴に、出典つきで記録する）',
+                'old': ' / '.join(c['text'] for c in opened), 'old_source': newest['source'], 'old_as_of': newest['as_of']}
     for c in opened:
         if norm(c['text']) == norm(text):
             return {'action': 'refresh_open', 'reason': '未確認のまま再観測'}
@@ -275,6 +278,8 @@ def run_plan(args, write):
     entries = journal['all_entries'](AI, args.date)
     if args.entry:
         entries = [e for e in entries if e['id'] in args.entry]
+    # 追記された順ではなく、記録の日時順に判断する（結果が追記順に依存しないようにする）
+    entries = sorted(entries, key=lambda e: (e['date'], e['time'], e['id']))
     actions, pages = plan(AI, entries)
     result = {'actions': actions, 'written': []}
     if write:
