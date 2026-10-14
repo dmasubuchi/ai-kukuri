@@ -1,0 +1,302 @@
+#!/usr/bin/env python3
+"""Resolve historical references without editing originals or traversing media trees."""
+import argparse
+from collections import Counter
+import datetime as dt
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import runpy
+import stat
+import sys
+from urllib.parse import unquote
+import uuid
+
+AI=Path(__file__).resolve().parents[1]
+GOOD={'current','mapped','archived'}
+PARSER_VERSION=2
+
+
+def now(): return dt.datetime.now().astimezone().isoformat()
+
+
+def load(path, default=None):
+    try: return json.loads(path.read_text())
+    except FileNotFoundError: return default
+
+
+def guard(path, workspace=None):
+    root = Path(os.path.realpath(workspace or AI)); real = Path(os.path.realpath(path))
+    if not (real == root or root in real.parents):
+        raise ValueError('ワークスペース外へ解決されるため書き込みません: ' + str(path))
+    return path
+
+
+def save(path, value, workspace=None):
+    guard(path.parent, workspace)
+    path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
+    temp=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
+    with os.fdopen(os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'w') as f:
+        json.dump(value,f,ensure_ascii=False,indent=2); f.flush(); os.fsync(f.fileno())
+    os.replace(temp,path)
+
+
+def inside(path, root):
+    try: path.relative_to(root); return True
+    except ValueError: return False
+
+
+def extract_references(text):
+    result=[]
+    for number,line in enumerate(text.splitlines(),1):
+        values=[]
+        for match in re.finditer(r'!?\[[^\]]*\]\((<[^>]+>|[^)]+)\)|`([^`\n]+)`|\[\[([^\]]+)\]\]',line):
+            value=next(g for g in match.groups() if g is not None)
+            if match[3]: value=value.split('|')[0]
+            if match[1]: value=re.sub(r'\s+"[^"]*"$','',value)
+            values.append(value.strip('<>'))
+        values.extend(re.findall(r'(?:/Users/|/home/|~/|file:///)[^\s`"\]\)<>、。]+',line))
+        for value in dict.fromkeys(values):
+            if value.startswith(('http:','https:','mailto:','#')): continue
+            if re.search(r'\s/\s',value) or re.fullmatch(r'/[\w-]+',value): continue
+            if not (value.startswith(('/','~/','./','../','file:','project:','doc:')) or '/' in value or re.search(r'\.(?:md|pdf|txt|csv|json|mp3|wav|docx|xlsx)(?:#.*)?$',value,re.I)): continue
+            if '\n' in value or value.startswith(('curl ','python ','node ','git ','uv ','npx ')): continue
+            result.append({'line':number,'reference':value})
+    return result
+
+
+class Resolver:
+    def __init__(self, ai):
+        self.ai=ai; self.state=ai/'runtime/path-repair'
+        self.previous=load(self.state/'state.json',{})
+        self.config=load(ai/'registry/paths.json',{'roots':[]})
+        self.config['verified_references']=self.config.get('verified_references',[])+load(self.state/'verified.json',[])
+        self.machine=load(ai/'runtime/machine.json',{})
+        self.roots={}
+        self.relative_roots={row['id'] for row in self.config['roots'] if row.get('relative_search')}
+        self.legacy_names={Path(h).name for row in self.config['roots'] for h in row.get('historical',[])}
+        for row in self.config['roots']:
+            roots=row.get('historical',[])+[self.machine[k] for k in row.get('machine_keys',[]) if k in self.machine]
+            if row.get('workspace_relative'): roots.append(str(ai/row['workspace_relative']))
+            self.roots[row['id']]=list(dict.fromkeys(Path(p) for p in roots))
+        pointer=load(ai/'knowledge/current.json',{})
+        path=ai/pointer.get('run','knowledge/imports/absent')/'manifest.jsonl'
+        self.documents=[json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+        for folder in ('pages','journal'):
+            for path in sorted((ai/'knowledge'/folder).glob('*.md')):
+                data=path.read_bytes()
+                self.documents.append({'id':folder+':'+path.stem,'original':str(path),'status':'local',
+                                       'text':data.decode('utf-8'),'sha256':hashlib.sha256(data).hexdigest(),'category':folder})
+        self.originals={d['original']:d for d in self.documents}
+        self.ids={d['id']:d for d in self.documents}
+        if (ai/'bin/kukuri-tasks').is_file() and (ai/'tasks/baseline.json').is_file():
+            items,_=runpy.run_path(str(ai/'bin/kukuri-tasks'))['read_state'](ai)
+            for task in items.values():
+                text=task['title']+'\n'+('\n'.join('`'+v+'`' for v in task['links']))
+                source=self.ids.get(task['created_from'].split(':')[0],{})
+                self.documents.append({'id':task['id'],'original':source.get('original',str(ai/'tasks/baseline.json')),
+                                       'status':'local','text':text,'sha256':hashlib.sha256(text.encode()).hexdigest(),
+                                       'category':'current-task','critical':task['status'] not in ('done','cancelled')})
+        self.by_name={}
+        for d in self.documents:
+            self.by_name.setdefault(Path(d['original']).name,[]).append(d)
+
+    def probe(self, path):
+        try:
+            real=path.resolve(strict=True)
+            allowed=[self.ai]+[p for roots in self.roots.values() for p in roots]
+            platform_path=Path('/private'+str(path)) if sys.platform=='darwin' and str(path).startswith(('/var/','/tmp/','/etc/')) else path
+            if real!=platform_path and not any(inside(real,p.resolve()) for p in allowed):
+                return {'path':str(path),'status':'symlink_unverified','realpath':str(real)}
+            s=path.stat()
+            if not (stat.S_ISREG(s.st_mode) or stat.S_ISDIR(s.st_mode)):
+                return {'path':str(path),'status':'unsupported_type'}
+            if not os.access(path,os.R_OK|(os.X_OK if stat.S_ISDIR(s.st_mode) else 0)):
+                raise PermissionError('read access denied')
+            if stat.S_ISREG(s.st_mode):
+                with path.open('rb') as f: f.read(0)
+            else:
+                with os.scandir(path) as entries: next(entries,None)
+            return {'path':str(path),'status':'readable','realpath':str(real),
+                    'fingerprint':[s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns]}
+        except FileNotFoundError: return {'path':str(path),'status':'not_found'}
+        except PermissionError: return {'path':str(path),'status':'inaccessible'}
+        except (OSError,RuntimeError) as error: return {'path':str(path),'status':'io_error','error':str(error)}
+
+    def candidates(self, reference, base):
+        reference=unquote(reference.removeprefix('file://')).split('#')[0]
+        if reference.startswith('project:'):
+            project,_,tail=reference[8:].partition('/')
+            rows=load(self.ai/'registry/projects.json',{}).get('projects',[])
+            match=next((p for p in rows if p['id']==project),None)
+            if not match or '..' in Path(tail).parts: return [],'unknown_project'
+            return [p/match['directory']/tail for p in self.roots.get('projects',[])],'project:'+project
+        if reference.startswith('~/'):
+            home=self.machine.get('source_home')
+            if not home: return [],'unknown_home'
+            reference=home+reference[1:]
+        path=Path(reference)
+        if not path.is_absolute():
+            if not base: return [],'relative_without_context'
+            paths=[Path(base).parent/path]
+            for root in [r for k,v in self.roots.items() if k in self.relative_roots for r in v]:
+                if inside(Path(base),root) and not reference.startswith('.'):
+                    paths.extend(parent/path for parent in Path(base).parents if inside(parent,root))
+            legacy=self.machine.get('legacy_root')
+            if legacy and path.parts and path.parts[0] in self.legacy_names:
+                paths.append(Path(legacy)/path)
+        else: paths=[path]
+        paths=[Path(os.path.normpath(p)) for p in paths]
+        mapped=[]; rule='exact'
+        for path in paths:
+            matches=[(root,key) for key,roots in self.roots.items() for root in roots if inside(path,root)]
+            if matches:
+                root,key=max(matches,key=lambda p:len(p[0].parts))
+                mapped.extend(r/path.relative_to(root) for r in self.roots[key]); rule='root:'+key
+            else: mapped.append(path)
+        return list(dict.fromkeys(paths+mapped)),rule
+
+    def resolve(self, reference, base=None, record=True, forget=False, retry=False):
+        result={'reference':reference,'base':base,'checked_at':now(),'loss_confirmed':False}
+        key=hashlib.sha256(json.dumps([reference,base],ensure_ascii=False).encode()).hexdigest()
+        result['key']=key
+        previous=self.previous.get(key,{})
+        if forget or (previous.get('revoked') and not retry):
+            result.update(status='revoked',revoked=True)
+        elif re.search(r'[<>*{}$]|\.\.\.|…|YYYY|MM-DD|WXX',reference): result['status']='template'
+        else:
+            if reference.startswith('doc:'):
+                doc=self.ids.get(reference[4:]); paths=[Path(doc['original'])] if doc else []; rule='document_id'
+            else: paths,rule=self.candidates(reference,base)
+            for alias in self.config.get('verified_references',[]):
+                if alias['reference']!=reference or alias['base']!=base: continue
+                proof=alias['evidence']; data=(self.ai/proof['snapshot']).read_bytes()
+                lines=data.decode('utf-8-sig').splitlines()
+                if hashlib.sha256(data).hexdigest()!=proof['sha256'] or not 1<=proof['line']<=len(lines) or lines[proof['line']-1]!=proof['quote']:
+                    result['status']='integrity_error'
+                    if record: self.record([result])
+                    return result
+                extra,_=self.candidates(alias['target'],None)
+                paths=list(dict.fromkeys(paths+extra)); rule='evidence_scoped_alias'; result['evidence']=proof
+            probes=[] if reference.startswith('doc:') else [self.probe(p) for p in paths]
+            result.update(rule=rule,candidates=probes)
+            available={tuple(p['fingerprint'][:2]):p for p in probes if p['status']=='readable'}
+            uncertain=[p for p in probes if p['status'] not in ('readable','not_found')]
+            if uncertain:
+                result['status']=uncertain[0]['status']
+            elif len(available)>1: result['status']='ambiguous'
+            elif available:
+                selected=next(iter(available.values()))
+                direct=paths and selected['path']==str(paths[0])
+                result.update(status='current' if direct else 'mapped',path=selected['path'],fingerprint=selected['fingerprint'],realpath=selected['realpath'])
+            else:
+                docs=[self.originals[str(p)] for p in paths if str(p) in self.originals and self.originals[str(p)].get('snapshot')]
+                snapshots={d['sha256']:d for d in docs}
+                if len(snapshots)>1: result['status']='ambiguous'
+                elif snapshots:
+                    doc=next(iter(snapshots.values())); snapshot=self.ai/doc['snapshot']
+                    probe=self.probe(snapshot)
+                    if probe['status']!='readable': result['status']=probe['status']
+                    elif hashlib.sha256(snapshot.read_bytes()).hexdigest()!=doc['sha256']: result['status']='integrity_error'
+                    else: result.update(status='archived',path=str(snapshot),document_id=doc['id'],sha256=doc['sha256'],rule='verified_snapshot',source_mtime_ns=doc.get('source_mtime_ns'),notice='当時の原文の写し。現在の原本の存在・最新状態は未確認。')
+                else:
+                    result['status']='not_found' if paths else rule
+                    suggestions={d['original']:d for p in paths for d in self.by_name.get(p.name,[])}
+                    result['suggestions']=[{'original':d['original'],'document_id':d['id'],'basis':'same_filename_only_not_verified'} for d in suggestions.values()][:20]
+        if record: self.record([result])
+        return result
+
+    def record(self, results):
+        guard(self.state, self.ai)
+        self.state.mkdir(parents=True,exist_ok=True,mode=0o700)
+        with (self.state/'lock').open('a') as lock:
+            fcntl.flock(lock,fcntl.LOCK_EX)
+            state=load(self.state/'state.json',{})
+            unique={}
+            for result in sorted(results,key=lambda r:r.get('critical',False)): unique[result['key']]=result
+            with (self.state/'history.jsonl').open('a') as history:
+                for result in unique.values():
+                    key=result['key']; old=state.get(key,{})
+                    changed=any(old.get(k)!=result.get(k) for k in ('status','path','rule','sha256','revoked'))
+                    row={**result,'first_seen':old.get('first_seen',result['checked_at']),'checks':old.get('checks',0)+1,
+                         'failures':old.get('failures',0)+int(result['status'] not in GOOD|{'template','revoked'})}
+                    if changed:
+                        history.write(json.dumps({'event_id':uuid.uuid4().hex,'at':now(),'before':{k:old.get(k) for k in ('status','path','rule')},'after':row},ensure_ascii=False)+'\n')
+                    state[key]=row
+                history.flush(); os.fsync(history.fileno())
+            save(self.state/'state.json',state,self.ai)
+            self.previous=state
+
+
+def check(ai, label='manual', if_stale=None):
+    resolver=Resolver(ai); previous=load(resolver.state/'latest.json',{})
+    if if_stale is not None and previous and (dt.datetime.now().astimezone()-dt.datetime.fromisoformat(previous['checked_at'])).total_seconds()<if_stale*3600:
+        return {**previous['summary'],'cached':True,'checked_at':previous['checked_at']}
+    cache=load(resolver.state/'extracted.json',{}); results=[]; errors=[]; reads=0
+    critical={e['document_id'] for r in load(ai/'tasks/reviewed.json',{}).get('items',[]) for e in r.get('evidence',[])}
+    for doc in resolver.documents:
+        if doc.get('status') not in ('imported','local'): continue
+        digest=doc['sha256']
+        try:
+            snapshot=ai/doc['snapshot'] if 'snapshot' in doc else None
+            s=snapshot.stat() if snapshot else None
+            fingerprint=[s.st_dev,s.st_ino,s.st_size,s.st_mtime_ns] if s else None
+            if not isinstance(cache.get(digest),dict) or cache[digest]['fingerprint']!=fingerprint or cache[digest].get('parser_version')!=PARSER_VERSION:
+                data=snapshot.read_bytes() if snapshot else doc['text'].encode('utf-8')
+                if hashlib.sha256(data).hexdigest()!=digest: raise ValueError('snapshot hash mismatch')
+                cache[digest]={'fingerprint':fingerprint,'parser_version':PARSER_VERSION,'references':extract_references(data.decode(doc.get('encoding','utf-8-sig')))}; reads+=1
+            for reference in cache[digest]['references']:
+                result=resolver.resolve(reference['reference'],base=doc['original'],record=False)
+                result.update(document_id=doc['id'],line=reference['line'],category=doc.get('category'),critical=doc.get('critical',False) or doc['id'] in critical)
+                results.append(result)
+        except (OSError,ValueError) as error: errors.append({'document_id':doc['id'],'error':str(error)})
+    resolver.record(results)
+    counts=dict(Counter(r['status'] for r in results)); usable=sum(counts.get(s,0) for s in GOOD)
+    denominator=len(results)-counts.get('template',0)
+    summary={'references':len(results),'statuses':counts,'usable':usable,'usable_rate':round(usable/denominator,4) if denominator else None,
+             'critical_unresolved':sum(r['critical'] and r['status'] not in GOOD|{'template'} for r in results),
+             'new_texts_read':reads,'errors':errors,'report':str(resolver.state/'latest.json')}
+    save(resolver.state/'extracted.json',cache,ai)
+    save(resolver.state/'latest.json',{'checked_at':now(),'label':label,'summary':summary,'results':results},ai)
+    return summary
+
+
+def report(ai):
+    state=ai/'runtime/path-repair'; rows=list(load(state/'state.json',{}).values())
+    latest=load(state/'latest.json',{})
+    historical=len(rows)
+    if latest:
+        active={r['key'] for r in latest['results']}
+        rows=[r for r in rows if r['key'] in active or r['checked_at']>latest['checked_at']]
+    unresolved=[r for r in rows if r['status'] not in GOOD|{'template'}]
+    recurring=[r for r in unresolved if r['failures']>=3]
+    history=state/'history.jsonl'
+    events=[json.loads(line) for line in history.read_text().splitlines()] if history.exists() else []
+    return {'latest':latest.get('summary'), 'unique_references':len(rows),'historical_references':historical,
+            'unresolved':len(unresolved),'recurring':len(recurring),'statuses':dict(Counter(r['status'] for r in rows)),
+            'examples':sorted(unresolved,key=lambda r:(r.get('critical',False),r['failures']),reverse=True)[:15],
+            'events':len(events),'owner_consultation':bool(recurring),
+            'proposal':'繰り返す未解決を案件・原因別に調査する。構造・検索方式・信頼基準の変更が必要なら理由と選択肢を相談。個別修復の承認待ちは不要。',
+            'scope':'索引にあるテキスト参照のみ。未索引の素材・会話ログ・外部サービスは検査済みではない。'}
+
+
+def main():
+    os.umask(0o077)
+    parser=argparse.ArgumentParser(description=__doc__); sub=parser.add_subparsers(dest='command',required=True)
+    one=sub.add_parser('resolve'); one.add_argument('reference'); one.add_argument('--base'); one.add_argument('--forget',action='store_true'); one.add_argument('--retry',action='store_true')
+    scan=sub.add_parser('check'); scan.add_argument('--if-stale',type=float); scan.add_argument('--label',default='manual')
+    sub.add_parser('report'); args=parser.parse_args()
+    if args.command=='resolve': result=Resolver(AI).resolve(args.reference,args.base,forget=args.forget,retry=args.retry)
+    elif args.command=='check': result=check(AI,args.label,args.if_stale)
+    else: result=report(AI)
+    print(json.dumps(result,ensure_ascii=False,indent=2))
+    return 2 if result.get('status') not in (None,*GOOD,'template') or result.get('errors') else 0
+
+
+if __name__=='__main__':
+    try: sys.exit(main())
+    except (OSError,ValueError,KeyError,TypeError) as error:
+        print('停止: '+str(error),file=sys.stderr); sys.exit(2)

@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "policy": "Resolve at read time. Never rewrite originals. runtime/machine.json supplies this machine's roots; add historical prefixes when records mention old absolute paths.",
+  "roots": [
+    {"id": "projects", "historical": [], "machine_keys": ["projects_root"], "workspace_relative": "projects"},
+    {"id": "input", "historical": [], "machine_keys": ["input_root"], "workspace_relative": "input"},
+    {"id": "output", "historical": [], "machine_keys": ["output_root"], "workspace_relative": "output"}
+  ]
+}

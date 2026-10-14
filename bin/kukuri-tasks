@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""Shared local task state. History is append-only; every state change needs evidence."""
+import argparse
+import datetime as dt
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import sys
+import uuid
+
+AI = Path(__file__).resolve().parents[1]
+STATES = {'unconfirmed','active','waiting','blocked','done','cancelled','external'}
+FIELDS = {'title','status','owner','due','customer_id','project_id','next_action','links','system_of_record','evidence'}
+
+
+def real_inside(ai, path):
+    root = Path(os.path.realpath(ai)); real = Path(os.path.realpath(path))
+    return real == root or root in real.parents
+
+
+def guard_write(ai, path):
+    """ワークスペース外へ解決される書き込み、および最終要素がsymlinkの書き込みを拒否する。"""
+    path = Path(path)
+    if path.is_symlink():
+        raise ValueError('シンボリックリンクへは書き込みません: ' + str(path))
+    if not real_inside(ai, path.parent):
+        raise ValueError('ワークスペース外へ解決されるため書き込みません: ' + str(path.parent))
+    return path
+
+
+def open_append(ai, path):
+    path = guard_write(ai, path)
+    fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+    return os.fdopen(fd, 'a', encoding='utf-8')
+
+
+def now():
+    return dt.datetime.now().astimezone().isoformat()
+
+
+def evidence(ai, entries):
+    if not isinstance(entries,list) or not entries:
+        raise ValueError('変更の根拠が必要です')
+    for row in entries:
+        if not row.get('quote'):
+            raise ValueError('根拠の引用が空です')
+        if row.get('type') == 'owner_instruction':
+            if not row.get('recorded_at'):
+                raise ValueError('本人の発言時点が必要です')
+        else:
+            path = row.get('snapshot') or row.get('path')
+            if not path:
+                raise ValueError('原本または保存済み原文が必要です')
+            data = (ai/path).read_bytes()
+            lines = data.decode('utf-8-sig').splitlines()
+            line = row.get('line',0)
+            if hashlib.sha256(data).hexdigest()!=row.get('sha256') or not 1<=line<=len(lines) or lines[line-1]!=row['quote']:
+                raise ValueError('根拠のハッシュ・行・引用が一致しません')
+
+
+def initial(item, at):
+    return {'id':item['id'], 'title':item['content'], 'status':'unconfirmed',
+            'owner':item.get('owner'), 'due':item.get('due'), 'customer_id':None, 'project_id':None,
+            'related_repo':item.get('related_repo'), 'context':item.get('related_context'),
+            'next_action':item.get('next_action'), 'links':[], 'system_of_record':'local',
+            'created_from':item['id'], 'last_updated':at, 'completion_evidence':[],
+            'evidence':item['evidence'], 'revision':0}
+
+
+def read_state(ai):
+    baseline=json.loads((ai/'tasks/baseline.json').read_text())
+    items={r['id']:r for r in baseline['items']}
+    path=ai/'tasks/events.jsonl'
+    events=[json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+    for event in events:
+        item=event['item']; previous=items.get(item['id'])
+        if event['operation']=='update':
+            if previous is None or item['revision']!=previous['revision']+1:
+                raise ValueError('更新履歴の版が不連続です')
+        elif event['operation']!='add' or previous or item['revision']!=0:
+            raise ValueError('更新履歴が不正です')
+        items[item['id']]=item
+    return items,events
+
+
+def validate(ai, item):
+    if not isinstance(item.get('title'),str) or not item['title'].strip() or item.get('status') not in STATES:
+        raise ValueError('タイトルまたは状態が不正です')
+    for key in ('owner','due','customer_id','project_id','next_action'):
+        if item.get(key) is not None and not isinstance(item[key],str):
+            raise ValueError(key+' は文字列またはnullです')
+    if not isinstance(item['links'],list) or not all(isinstance(v,str) for v in item['links']):
+        raise ValueError('links は文字列の配列です')
+    authority=item['system_of_record']
+    if authority!='local' and not (isinstance(authority,str) and authority.startswith('https://')):
+        raise ValueError('外部正本はhttpsの参照URLで指定してください')
+    if authority!='local' and item['status']!='external':
+        raise ValueError('外部正本の状態はここでは変更できません。正本を確認してください')
+    evidence(ai,item['evidence'])
+
+
+def change(ai, args):
+    items,events=read_state(ai)
+    patch=json.loads(Path(args.file).read_text())
+    if not isinstance(patch,dict) or set(patch)-FIELDS:
+        raise ValueError('未対応の更新項目です')
+    evidence(ai,patch.get('evidence'))
+    if args.command=='add':
+        item={'id':'task-'+uuid.uuid4().hex[:16], 'title':'','status':'active','owner':None,'due':None,
+              'customer_id':None,'project_id':None,'next_action':None,'links':[],
+              'system_of_record':'local','created_from':'new','completion_evidence':[], 'revision':0}
+        item.update(patch)
+        if item['system_of_record']!='local': item['status']='external'
+    else:
+        item=dict(items[args.id])
+        if item['revision']!=args.expected_revision:
+            raise ValueError('競合: 最新版を読み直してください')
+        if 'system_of_record' in patch and patch['system_of_record']!=item['system_of_record']:
+            raise ValueError('正本の変更は通常の状態更新では行いません')
+        item.update(patch); item['revision']+=1
+    validate(ai,item)
+    item['last_updated']=now()
+    if item['status']!='done': item['completion_evidence']=[]
+    elif patch.get('status')=='done': item['completion_evidence']=patch['evidence']
+    event={'event_id':uuid.uuid4().hex,'at':item['last_updated'],'operation':args.command,'item':item}
+    with open_append(ai,ai/'tasks/events.jsonl') as f:
+        f.write(json.dumps(event,ensure_ascii=False)+'\n'); f.flush(); os.fsync(f.fileno())
+    return item
+
+
+def main():
+    os.umask(0o077)
+    parser=argparse.ArgumentParser(description=__doc__)
+    sub=parser.add_subparsers(dest='command',required=True)
+    sub.add_parser('init'); sub.add_parser('history')
+    show=sub.add_parser('list'); show.add_argument('--all',action='store_true'); show.add_argument('--query',default=''); show.add_argument('--through'); show.add_argument('--status',choices=sorted(STATES))
+    add=sub.add_parser('add'); add.add_argument('--file',required=True)
+    update=sub.add_parser('update'); update.add_argument('id'); update.add_argument('--expected-revision',required=True,type=int); update.add_argument('--file',required=True)
+    args=parser.parse_args()
+    if args.command=='list' and args.through: dt.date.fromisoformat(args.through)
+    guard_write(AI,AI/'tasks/.lock')
+    (AI/'tasks').mkdir(exist_ok=True,mode=0o700)
+    with open_append(AI,AI/'tasks/.lock') as lock:
+        fcntl.flock(lock,fcntl.LOCK_EX)
+        if args.command=='init':
+            baseline=guard_write(AI,AI/'tasks/baseline.json')
+            if not baseline.exists():
+                source=AI/'tasks/reviewed.json'
+                raw=source.read_bytes() if source.exists() else b'{"items": []}'; reviewed=json.loads(raw)
+                for row in reviewed['items']:
+                    if row['evidence']: evidence(AI,row['evidence'])
+                data={'created_at':now(),'reviewed_sha256':hashlib.sha256(raw).hexdigest(),
+                      'items':[initial(r,reviewed.get('reviewed_at')) for r in reviewed['items']]}
+                temporary=AI/'tasks'/('baseline-'+uuid.uuid4().hex+'.tmp')
+                with temporary.open('x') as f:
+                    json.dump(data,f,ensure_ascii=False,indent=2); f.flush(); os.fsync(f.fileno())
+                os.link(temporary,baseline); temporary.unlink()
+            result={'baseline':str(baseline),'items':len(read_state(AI)[0])}
+        elif args.command in ('add','update'):
+            result=change(AI,args)
+        else:
+            items,events=read_state(AI)
+            if args.command=='history': result={'events':events}
+            else:
+                rows=[v for v in items.values() if (args.all or v['status'] not in ('done','cancelled'))
+                      and (not args.status or v['status']==args.status)
+                      and args.query.casefold() in json.dumps(v,ensure_ascii=False).casefold()]
+                unknown=[]
+                if args.through:
+                    def dated(r):
+                        raw=r.get('due') or ''
+                        if not re.fullmatch(r'\d{4}-\d{2}-\d{2}(?:（超過）|\(超過\))?',raw): return None
+                        try: return dt.date.fromisoformat(raw[:10])
+                        except (TypeError,ValueError): return None
+                    unknown=[r['id'] for r in rows if dated(r) is None]
+                    rows=[r for r in rows if dated(r) is not None and dated(r)<=dt.date.fromisoformat(args.through)]
+                result={'as_of':now(),'items':rows,'unknown_due_ids':unknown,
+                        'caution':'未確認は現役確定ではありません。後日の記録・原本と照合してください。'}
+    print(json.dumps(result,ensure_ascii=False,indent=2))
+
+
+if __name__=='__main__':
+    try: main()
+    except (OSError,ValueError,KeyError,TypeError) as error:
+        print('停止: '+str(error),file=sys.stderr); sys.exit(2)

@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+"""Living Wiki: what is known now. Updated from journal entries, never from guesses.
+
+Journal = 何が起きたか / Living Wiki = 現在分かっていること / TODO = これから行うこと（kukuri-tasks）。
+判断できない矛盾は「未確認・矛盾」に出典・日付つきで両方残す。決められるのは、日付と種類で優劣が明確な場合だけ。
+"""
+import argparse
+import datetime as dt
+import json
+import os
+import re
+import runpy
+import sys
+import unicodedata
+from pathlib import Path
+
+AI = Path(__file__).resolve().parents[1]
+journal = runpy.run_path(str(Path(__file__).resolve().parent / 'kukuri-journal'))
+KINDS = journal['KINDS']
+guard_write = journal['guard_write']
+WIKI_REF = journal['WIKI_REF']
+MARKER = '<!-- kukuri-wiki:v1 -->'
+SEC_NOW, SEC_OPEN, SEC_HIST = '現在わかっていること', '未確認・矛盾', '履歴'
+CONFIRMING = ('decision', 'result')       # 確定の根拠になる種類
+CLAIM = re.compile(r'^- \[([A-Za-z0-9_-]+)\] (.*)$')
+STALE_DAYS = 90
+
+
+def pages_dir(ai):
+    return ai / 'knowledge' / 'pages'
+
+
+def norm(text):
+    return re.sub(r'\s+', '', unicodedata.normalize('NFKC', text)).casefold()
+
+
+def clean(text):
+    return text.replace('|', '／').replace('\n', ' ').strip()
+
+
+def parse_page(path):
+    """None = 新形式ではない（既存の自由形式ページ。自動更新しない）。"""
+    text = path.read_text(encoding='utf-8')
+    if MARKER not in text:
+        return None
+    page = {'title': path.stem, 'claims': [], 'history': []}
+    section = None
+    for line in text.splitlines():
+        if line.startswith('# ') and page['title'] == path.stem:
+            page['title'] = line[2:].strip()
+        elif line.startswith('## '):
+            section = line[3:].strip()
+        elif section in (SEC_NOW, SEC_OPEN):
+            m = CLAIM.match(line)
+            if not m:
+                continue
+            parts = [p.strip() for p in m.group(2).split(' | ')]
+            claim = {'key': m.group(1), 'text': parts[0], 'as_of': None, 'source': None, 'kind': None,
+                     'status': '確定' if section == SEC_NOW else '未確認'}
+            for p in parts[1:]:
+                k, _, v = p.partition(':')
+                k, v = k.strip(), v.strip()
+                if k in ('as_of', 'source', 'kind'):
+                    claim[k] = v
+                elif k == '状態':
+                    claim['status'] = v
+            page['claims'].append(claim)
+        elif section == SEC_HIST and line.startswith('- '):
+            page['history'].append(line[2:])
+    return page
+
+
+def render(page, today):
+    out = ['# ' + page['title'], '', MARKER, '', '更新: ' + today, '',
+           '種別: Living Wiki（現在分かっていること）。過去の経緯は knowledge/journal、これからの仕事は tasks。', '']
+    def line(c):
+        s = '- [%s] %s | as_of: %s | source: %s | kind: %s' % (c['key'], clean(c['text']), c['as_of'], c['source'], c['kind'])
+        if c['status'] not in ('確定',):
+            s += ' | 状態: ' + c['status']
+        return s
+    confirmed = [c for c in page['claims'] if c['status'] == '確定']
+    opened = [c for c in page['claims'] if c['status'] != '確定']
+    out += ['## ' + SEC_NOW] + [line(c) for c in confirmed] + ['']
+    out += ['## ' + SEC_OPEN] + [line(c) for c in opened] + ['']
+    out += ['## ' + SEC_HIST] + ['- ' + h for h in page['history']] + ['']
+    return '\n'.join(out)
+
+
+def entry_refs(entries):
+    for e in entries:
+        for ref in e['wiki']:
+            m = WIKI_REF.match(ref)
+            if m:
+                yield e, m.group(1), m.group(2), m.group(3).strip()
+
+
+def plan(ai, entries):
+    """Entries -> actions. Pure decision logic; nothing is written here."""
+    pages, actions = {}, []
+    folder = pages_dir(ai)
+    for e, slug, key, text in entry_refs(entries):
+        if slug not in pages:
+            path = folder / (slug + '.md')
+            if path.exists():
+                pages[slug] = parse_page(path)
+                if pages[slug] is None:
+                    actions.append({'entry': e['id'], 'page': slug, 'key': key, 'action': 'manual_legacy_page',
+                                    'reason': '既存の自由形式ページは自動更新しない。人が内容を確認して移す'})
+                    continue
+            else:
+                pages[slug] = {'title': slug, 'claims': [], 'history': [], 'new': True}
+        page = pages[slug]
+        if page is None:
+            actions.append({'entry': e['id'], 'page': slug, 'key': key, 'action': 'manual_legacy_page',
+                            'reason': '既存の自由形式ページは自動更新しない'})
+            continue
+        act = decide(page, e, key, text)
+        act.update(entry=e['id'], page=slug, key=key)
+        actions.append(act)
+        apply_action(page, e, key, text, act)  # 同じ実行内の後続判断に反映（メモリ上のみ）
+    return actions, pages
+
+
+def decide(page, e, key, text):
+    current = [c for c in page['claims'] if c['key'] == key]
+    for c in current:
+        if c['source'] == e['id']:
+            return {'action': 'skip', 'reason': '同じ記録は反映済み'}
+    for h in page['history']:
+        if e['id'] in h:
+            return {'action': 'skip', 'reason': '履歴に反映済み'}
+    confirmed = [c for c in current if c['status'] == '確定']
+    opened = [c for c in current if c['status'] != '確定']
+    confirms = e['kind'] in CONFIRMING
+    if not current:
+        return {'action': 'add' if confirms else 'add_unconfirmed',
+                'reason': '新しい事実' if confirms else '提案・観察・依頼は確定扱いにせず未確認として追加'}
+    if confirmed:
+        c = confirmed[0]
+        if norm(c['text']) == norm(text):
+            return ({'action': 'refresh', 'reason': 'より新しい記録で同じ内容を再確認'}
+                    if e['date'] > c['as_of'] else {'action': 'skip', 'reason': '同じ内容で、より古い記録'})
+        newer = e['date'] > c['as_of']
+        owner_over = e['kind'] == 'decision' and c['kind'] != 'decision' and e['date'] >= c['as_of']
+        if confirms and (newer or owner_over):
+            return {'action': 'supersede', 'reason': '後日の決定・結果で置換（旧記述は履歴に出典つきで保持）',
+                    'old': c['text'], 'old_source': c['source'], 'old_as_of': c['as_of']}
+        return {'action': 'conflict', 'reason': '日付または種類で優劣を決められないため、両方を未確認として保持',
+                'old': c['text'], 'old_source': c['source'], 'old_as_of': c['as_of']}
+    latest = max(c['as_of'] or '' for c in opened)
+    if confirms and e['date'] >= latest:
+        return {'action': 'resolve', 'reason': '決定・結果で未確認事項を解消（旧候補は履歴に保持）',
+                'old': ' / '.join(c['text'] for c in opened)}
+    for c in opened:
+        if norm(c['text']) == norm(text):
+            return {'action': 'refresh_open', 'reason': '未確認のまま再観測'}
+    return {'action': 'conflict_add', 'reason': '未確認の別候補を追加（確定の根拠になる記録ではない）'}
+
+
+def apply_action(page, e, key, text, act):
+    a = act['action']
+    new = {'key': key, 'text': text, 'as_of': e['date'], 'source': e['id'], 'kind': e['kind'], 'status': '確定'}
+    if a == 'add':
+        page['claims'].append(new)
+    elif a == 'add_unconfirmed':
+        new['status'] = '未確認'; page['claims'].append(new)
+    elif a == 'refresh':
+        for c in page['claims']:
+            if c['key'] == key and c['status'] == '確定':
+                c.update(as_of=e['date'], source=e['id'], kind=e['kind'])
+        page['history'].append('%s [%s] 再確認: %s（%s）' % (e['date'], key, clean(text), e['id']))
+    elif a == 'supersede':
+        page['claims'] = [c for c in page['claims'] if not (c['key'] == key and c['status'] == '確定')]
+        page['history'].append('%s [%s] 更新: 旧「%s」(%s, %s) → 新「%s」(%s, %s)' % (
+            e['date'], key, clean(act['old']), act['old_as_of'], act['old_source'], clean(text), e['date'], e['id']))
+        page['claims'].append(new)
+    elif a == 'conflict':
+        for c in page['claims']:
+            if c['key'] == key and c['status'] == '確定':
+                c['status'] = '競合'
+        new['status'] = '競合'; page['claims'].append(new)
+        page['history'].append('%s [%s] 競合: 「%s」(%s) と「%s」(%s) を未確認として保持' % (
+            e['date'], key, clean(act['old']), act['old_source'], clean(text), e['id']))
+    elif a == 'conflict_add':
+        new['status'] = '未確認'; page['claims'].append(new)
+    elif a == 'resolve':
+        page['claims'] = [c for c in page['claims'] if c['key'] != key]
+        page['history'].append('%s [%s] 解消: 旧候補「%s」→「%s」(%s)' % (e['date'], key, clean(act['old']), clean(text), e['id']))
+        page['claims'].append(new)
+    elif a == 'refresh_open':
+        for c in page['claims']:
+            if c['key'] == key and norm(c['text']) == norm(text):
+                c.update(as_of=max(c['as_of'] or '', e['date']), source=e['id'])
+
+
+def check(ai):
+    problems, stats = [], {'pages': 0, 'confirmed': 0, 'unconfirmed': 0, 'conflict': 0, 'stale': 0, 'legacy_pages': 0}
+    today = dt.date.today()
+    for path in sorted(pages_dir(ai).glob('*.md')):
+        page = parse_page(path)
+        if page is None:
+            stats['legacy_pages'] += 1
+            continue
+        stats['pages'] += 1
+        for c in page['claims']:
+            where = '%s#%s' % (path.stem, c['key'])
+            if not c['as_of'] or not re.match(r'^\d{4}-\d{2}-\d{2}$', c['as_of']):
+                problems.append(where + ': as_of がありません'); continue
+            if not c['source']:
+                problems.append(where + ': 出典がありません')
+            elif c['source'].startswith('j-'):
+                try:
+                    journal['find_entry'](ai, c['source'])
+                except ValueError:
+                    problems.append(where + ': 出典の記録が見つかりません ' + c['source'])
+            if c['kind'] not in KINDS:
+                problems.append(where + ': kind が不正です')
+            if dt.date.fromisoformat(c['as_of']) > today:
+                problems.append(where + ': as_of が未来です')
+            if c['status'] == '確定':
+                stats['confirmed'] += 1
+                if (today - dt.date.fromisoformat(c['as_of'])).days > STALE_DAYS:
+                    stats['stale'] += 1
+            elif c['status'] == '競合':
+                stats['conflict'] += 1
+            else:
+                stats['unconfirmed'] += 1
+    return {'stats': stats, 'problems': problems}
+
+
+def main():
+    ap = argparse.ArgumentParser(description='Living Wiki (what is known now)')
+    sub = ap.add_subparsers(dest='command', required=True)
+    for name in ('plan', 'apply'):
+        p = sub.add_parser(name)
+        p.add_argument('--date'); p.add_argument('--entry', action='append')
+        if name == 'apply':
+            p.add_argument('--write', action='store_true', help='指定しない限り何も書かない')
+    s = sub.add_parser('show'); s.add_argument('slug')
+    sub.add_parser('check')
+    args = ap.parse_args()
+    try:
+        if args.command in ('plan', 'apply'):
+            entries = journal['all_entries'](AI, args.date)
+            if args.entry:
+                entries = [e for e in entries if e['id'] in args.entry]
+            actions, pages = plan(AI, entries)
+            result = {'actions': actions, 'written': []}
+            if args.command == 'apply' and args.write:
+                today = dt.date.today().isoformat()
+                touched = {a['page'] for a in actions if a['action'] not in ('skip', 'manual_legacy_page')}
+                for slug in sorted(touched):                    # 先に全ページの書き込み先を確認する
+                    guard_write(AI, pages_dir(AI) / (slug + '.md'))
+                pages_dir(AI).mkdir(parents=True, exist_ok=True)
+                for slug in sorted(touched):
+                    page = pages[slug]; page.pop('new', None)
+                    target = guard_write(AI, pages_dir(AI) / (slug + '.md'))
+                    temporary = target.with_name('.' + target.name + '.tmp')
+                    fd = os.open(str(temporary), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+                    with os.fdopen(fd, 'w', encoding='utf-8') as out:
+                        out.write(render(page, today))
+                    os.replace(temporary, target)
+                    result['written'].append(slug)
+        elif args.command == 'show':
+            page = parse_page(pages_dir(AI) / (args.slug + '.md'))
+            result = page if page is not None else {'error': '新形式のページではありません'}
+        else:
+            result = check(AI)
+    except (ValueError, OSError) as error:
+        print('停止: ' + str(error), file=sys.stderr)
+        return 2
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 1 if args.command == 'check' and result['problems'] else 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

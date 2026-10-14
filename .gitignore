@@ -1,0 +1,12 @@
+__pycache__/
+*.pyc
+.DS_Store
+# 実データ・認証・履歴は持ち込まない
+/runtime/
+/knowledge/
+/tasks/
+/input/
+/output/
+/projects/
+.env
+*.pem

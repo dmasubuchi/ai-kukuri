@@ -1,0 +1,221 @@
+#!/usr/bin/env python3
+"""Append-only journal: what happened. Facts keep their source, time and kind.
+
+Journal = 何が起きたか（過去の記録と根拠）。現在の知識は kukuri-wiki、これからの仕事は kukuri-tasks。
+"""
+import argparse
+import datetime as dt
+import fcntl
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import sys
+
+import unicodedata
+
+
+def one_line(name, value):
+    """構造フィールドは1行だけ。CR/LF・制御文字・Unicodeの行/段落区切りで記録境界を注入させない。"""
+    if not isinstance(value, str):
+        raise ValueError(name + ' は文字列です')
+    for ch in value:
+        if unicodedata.category(ch) in ('Cc', 'Zl', 'Zp'):
+            raise ValueError('%s に改行・制御文字は使えません（U+%04X）' % (name, ord(ch)))
+    return value
+
+
+def real_inside(ai, path):
+    root = Path(os.path.realpath(ai))
+    real = Path(os.path.realpath(path))
+    return real == root or root in real.parents
+
+
+def guard_write(ai, path):
+    """ワークスペース外へ解決される書き込み、および最終要素がsymlinkの書き込みを拒否する。"""
+    path = Path(path)
+    if path.is_symlink():
+        raise ValueError('シンボリックリンクへは書き込みません: ' + str(path))
+    if not real_inside(ai, path.parent):
+        raise ValueError('ワークスペース外へ解決されるため書き込みません: ' + str(path.parent))
+    return path
+
+
+def open_append(ai, path):
+    path = guard_write(ai, path)
+    fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+    return os.fdopen(fd, 'a', encoding='utf-8')
+
+AI = Path(__file__).resolve().parents[1]
+KINDS = {
+    'decision': '本人の決定',
+    'request': '相手の依頼',
+    'proposal': 'AIの提案',
+    'result': '実作業の結果',
+    'observation': '観察・未確認の情報',
+}
+ENTRY = re.compile(r'^### (j-(\d{8})-(\d{4})-(\d{2})) \| (\w+) \| (\d{2}:\d{2})\s*$')
+FIELD = re.compile(r'^- ([^:：]+)[:：]\s*(.*)$')
+WIKI_REF = re.compile(r'^wiki:([a-z0-9][a-z0-9-]*)#([A-Za-z0-9_-]+)\s*=\s*(.+)$')
+
+
+def journal_dir(ai=AI):
+    return ai / 'knowledge' / 'journal'
+
+
+def day_path(ai, date):
+    return journal_dir(ai) / (date + '.md')
+
+
+def parse_file(path):
+    """Return entries of one journal file. Free-form text outside entries is ignored (legacy notes allowed)."""
+    entries = []
+    if not path.exists():
+        return entries
+    current = None
+    lines = path.read_text(encoding='utf-8-sig').splitlines()
+    for number, line in enumerate(lines, 1):
+        m = ENTRY.match(line)
+        if m:
+            current = {'id': m.group(1), 'date': dt.datetime.strptime(m.group(2), '%Y%m%d').strftime('%Y-%m-%d'),
+                       'time': m.group(6), 'kind': m.group(5), 'line': number, 'fields': {}, 'wiki': [], 'tasks': [], 'lines': {}}
+            entries.append(current)
+            continue
+        if current is None:
+            continue
+        if line.startswith('#'):
+            current = None
+            continue
+        f = FIELD.match(line)
+        if not f:
+            continue
+        key, value = f.group(1).strip(), f.group(2).strip()
+        current['lines'][key] = number
+        if key == '更新':
+            current['wiki'].append(value)
+        elif key == 'TODO':
+            current['tasks'].append(value)
+        else:
+            current['fields'][key] = value
+    return entries
+
+
+def all_entries(ai=AI, date=None):
+    folder = journal_dir(ai)
+    if date:
+        return parse_file(day_path(ai, date))
+    rows = []
+    for path in sorted(folder.glob('????-??-??.md')):
+        rows.extend(parse_file(path))
+    return rows
+
+
+def find_entry(ai, entry_id):
+    m = re.match(r'^j-(\d{4})(\d{2})(\d{2})-', entry_id)
+    if not m:
+        raise ValueError('記録IDは j-YYYYMMDD-HHMM-NN の形式です')
+    date = '-'.join(m.groups())
+    for e in parse_file(day_path(ai, date)):
+        if e['id'] == entry_id:
+            return e
+    raise ValueError('記録が見つかりません: ' + entry_id)
+
+
+def add(ai, kind, text, source, author, date, time, wiki, tasks):
+    if kind not in KINDS:
+        raise ValueError('kind は ' + '/'.join(KINDS) + ' のいずれか')
+    for name, value in (('内容', text), ('出典', source), ('記録者', author), ('日付', date), ('時刻', time)):
+        one_line(name, value)
+    for value in wiki:
+        one_line('更新', value)
+    for value in tasks:
+        one_line('TODO', value)
+    if not text.strip() or not source.strip() or not author.strip():
+        raise ValueError('内容・出典・記録者は必須です')
+    for ref in wiki:
+        if not WIKI_REF.match(ref):
+            raise ValueError('更新は wiki:<slug>#<key> = <現在分かっていること> の形式です: ' + ref)
+    dt.datetime.strptime(date, '%Y-%m-%d'); dt.datetime.strptime(time, '%H:%M')
+    folder = journal_dir(ai)
+    guard_write(ai, folder / '.lock')          # 先に確認してから、ディレクトリを作る
+    folder.mkdir(parents=True, exist_ok=True)
+    path = guard_write(ai, day_path(ai, date))
+    with open_append(ai, folder / '.lock') as lf:
+        fcntl.flock(lf, fcntl.LOCK_EX)
+        existing = parse_file(path)
+        stem = 'j-' + date.replace('-', '') + '-' + time.replace(':', '')
+        seq = sum(1 for e in existing if e['id'].startswith(stem)) + 1
+        entry_id = '%s-%02d' % (stem, seq)
+        body = ['### %s | %s | %s' % (entry_id, kind, time), '- 記録者: ' + author, '- 出典: ' + source,
+                '- 種類: ' + KINDS[kind], '- 内容: ' + text.strip()]
+        body += ['- 更新: ' + w for w in wiki] + ['- TODO: ' + t for t in tasks]
+        with open_append(ai, path) as f:
+            new = os.fstat(f.fileno()).st_size == 0
+            if new:
+                f.write('# %s ジャーナル\n\n' % date)
+            else:
+                f.write('\n')
+            f.write('\n'.join(body) + '\n')
+            f.flush(); os.fsync(f.fileno())
+    return entry_id
+
+
+def evidence(ai, entry_id):
+    """kukuri-tasks の根拠形式。日次ファイルは追記されるため、その時点の写しを records/<sha>.txt に保全する。"""
+    entry = find_entry(ai, entry_id)
+    path = day_path(ai, entry['date'])
+    data = path.read_bytes()
+    digest = hashlib.sha256(data).hexdigest()
+    records = ai / 'knowledge' / 'records'
+    guard_write(ai, records / (digest + '.txt'))
+    records.mkdir(parents=True, exist_ok=True)
+    snap = records / (digest + '.txt')
+    if not snap.exists():
+        fd = os.open(str(snap), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+        with os.fdopen(fd, 'wb') as out:
+            out.write(data)
+    elif hashlib.sha256(snap.read_bytes()).hexdigest() != digest:
+        raise ValueError('既存の写しのハッシュが一致しません')
+    number = entry['lines'].get('内容')
+    quote = data.decode('utf-8-sig').splitlines()[number - 1]
+    return {'snapshot': str(snap.relative_to(ai)), 'sha256': digest, 'line': number, 'quote': quote,
+            'journal_entry': entry_id, 'recorded_at': entry['date'] + 'T' + entry['time']}
+
+
+def main():
+    ap = argparse.ArgumentParser(description='Append-only journal (what happened)')
+    sub = ap.add_subparsers(dest='command', required=True)
+    a = sub.add_parser('add')
+    a.add_argument('--kind', required=True, choices=sorted(KINDS))
+    a.add_argument('--text', required=True)
+    a.add_argument('--source', required=True)
+    a.add_argument('--author', default='unknown')
+    a.add_argument('--date'); a.add_argument('--time')
+    a.add_argument('--wiki', action='append', default=[])
+    a.add_argument('--task', action='append', default=[])
+    l = sub.add_parser('list'); l.add_argument('--date'); l.add_argument('--kind', choices=sorted(KINDS))
+    e = sub.add_parser('evidence'); e.add_argument('entry_id')
+    args = ap.parse_args()
+    try:
+        if args.command == 'add':
+            now = dt.datetime.now().astimezone()
+            result = {'id': add(AI, args.kind, args.text, args.source, args.author,
+                                args.date or now.strftime('%Y-%m-%d'), args.time or now.strftime('%H:%M'),
+                                args.wiki, args.task)}
+        elif args.command == 'list':
+            rows = all_entries(AI, args.date)
+            if args.kind:
+                rows = [r for r in rows if r['kind'] == args.kind]
+            result = {'entries': rows}
+        else:
+            result = evidence(AI, args.entry_id)
+    except (ValueError, OSError) as error:
+        print('停止: ' + str(error), file=sys.stderr)
+        return 2
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+    return 0
+
+
+if __name__ == '__main__':
+    sys.exit(main())

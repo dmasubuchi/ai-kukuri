@@ -1,0 +1,432 @@
+#!/usr/bin/env python3
+"""Provenance-preserving local record import/search. Imported text is evidence, not instructions."""
+import argparse
+from collections import Counter
+import datetime
+import hashlib
+import json
+import os
+from pathlib import Path
+import re
+import runpy
+import sqlite3
+import sys
+import unicodedata
+import uuid
+
+AI = Path(__file__).resolve().parents[1]
+SKIP_DIRS = {'.git', 'node_modules', '.venv', '__pycache__', '.obsidian', '.cache', 'cache'}
+TEXT = {'.md', '.markdown', '.txt', '.csv', '.yaml', '.yml'}
+SENSITIVE = re.compile(r'-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|\b(?:sk-ant-|ghp_|gho_|github_pat_)[A-Za-z0-9_-]{20,}|\bAKIA[A-Z0-9]{16}\b|(?:access_token|refresh_token|client_secret)\s*[=:]\s*["\']?[A-Za-z0-9_./+-]{24,}', re.I)
+CHECKBOX = re.compile(r'^\s*[-*+]\s+\[([ xX-])\]\s*(.*)$')
+
+
+def norm(text):
+    return unicodedata.normalize('NFKC', text).casefold()
+
+
+def guard(path, workspace=None):
+    """ワークスペース外へ解決される書き込み先を拒否する（symlink経由を含む）。"""
+    root = Path(os.path.realpath(workspace or AI)); real = Path(os.path.realpath(path))
+    if not (real == root or root in real.parents):
+        raise ValueError('ワークスペース外へ解決されるため書き込みません: ' + str(path))
+    return path
+
+
+def write_json(path, data, workspace=None):
+    guard(path.parent, workspace)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with os.fdopen(os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'w',encoding='utf-8') as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def write_rows(path, rows, workspace=None):
+    guard(path.parent, workspace)
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    with os.fdopen(os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'w',encoding='utf-8') as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + '\n')
+
+
+def load_rows(path):
+    return [json.loads(line) for line in path.read_text().splitlines()]
+
+
+def read_document(ai, row):
+    return (ai/row['snapshot']).read_bytes().decode(row.get('encoding','utf-8-sig'))
+
+
+DEFAULT_RULES = [
+    # (substring of the relative path, category). First match wins. Override: registry/knowledge-categories.json
+    ('journal/', 'journal'), ('decisions/', 'decision'), ('/todos/', 'task-record'), ('todos/', 'task-record'),
+    ('/clients/', 'customer'), ('clients/', 'customer'), ('/people/', 'person'), ('people/', 'person'),
+    ('/transactions/', 'transaction'), ('transactions/', 'transaction'),
+]
+
+
+def category(source, relative):
+    if 'memory' in source:
+        return 'legacy-guidance' if Path(relative).name.startswith('feedback_') else 'memory'
+    if Path(relative).name in ('CLAUDE.md', 'AGENTS.md', 'SKILL.md') or '_template' in relative:
+        return 'procedure-reference'
+    rules = DEFAULT_RULES
+    custom = AI/'registry/knowledge-categories.json'
+    if custom.exists():
+        rules = [tuple(r) for r in json.loads(custom.read_text())['rules']]
+    for needle, name in rules:
+        if needle in relative:
+            return name
+    return 'background'
+
+
+def extract_tasks(doc, text):
+    rows, headings, table = [], [], []
+    for number, line in enumerate(text.splitlines(), 1):
+        heading = re.match(r'^(#{1,6})\s+(.*)', line)
+        if heading:
+            level = len(heading[1]); headings = [x for x in headings if x[0] < level] + [(level, heading[2])]
+        match = CHECKBOX.match(line)
+        fields = None
+        if match:
+            def field(label):
+                value = re.search(r'(?:^|\|)\s*' + label + r'\s*[:：]\s*([^|]+)', match[2])
+                return value[1].strip() if value else None
+            fields = {'text': match[2], 'recorded_status': 'checked' if match[1].lower() == 'x' else 'unchecked' if match[1] == ' ' else 'other',
+                      'owner': field('担当'), 'due': field('期限'), 'priority': field('優先度'), 'format': 'checkbox'}
+        if line.strip().startswith('|'):
+            cells = [s.strip() for s in line.strip().strip('|').split('|')]
+            if any(s in cells for s in ('タスク', 'TODO', 'Todo', 'ToDo', '作業')):
+                table = cells
+            elif table and len(cells) == len(table) and not all(re.fullmatch(r'[: -]+', s or '-') for s in cells):
+                entry = dict(zip(table, cells))
+                task = next((entry[k] for k in ('タスク', 'TODO', 'Todo', 'ToDo', '作業') if k in entry), '')
+                if task:
+                    fields = {'text': task, 'owner': entry.get('担当'), 'due': entry.get('期限'),
+                              'recorded_status': entry.get('状態', entry.get('ステータス', 'unspecified')),
+                              'priority': entry.get('優先度'), 'format': 'table'}
+        else:
+            table = []
+        if fields:
+            rows.append({'id': f"{doc['id']}:{number}", 'document_id': doc['id'], 'source': doc['source'],
+                         'relative': doc['relative'], 'line': number, 'quote': line, 'context': ' / '.join(x[1] for x in headings),
+                         'current_status': 'unconfirmed', 'needs_review': fields['recorded_status'] == 'checked' and bool(re.search('未確認|返事待ち|未実施|残り', fields['text'])),
+                         **fields})
+    return rows
+
+
+def enumerate_source(source):
+    root = Path(source['root'])
+    if not root.exists():
+        yield root, '.', 'missing_root'; return
+    if root.is_symlink():
+        yield root, '.', 'symlink_reference'; return
+    if root.is_file():
+        yield root, root.name, None; return
+    def error(exc):
+        raise exc
+    for directory, dirs, files in os.walk(root, followlinks=False, onerror=error):
+        for name in list(dirs):
+            path = Path(directory) / name
+            if name in SKIP_DIRS or path.is_symlink():
+                yield path, str(path.relative_to(root)), 'excluded_dependency' if name in SKIP_DIRS else 'symlink_reference'
+                dirs.remove(name)
+        for name in sorted(files):
+            path = Path(directory) / name
+            yield path, str(path.relative_to(root)), 'symlink_reference' if path.is_symlink() else None
+
+
+def import_sources(ai, config):
+    os.umask(0o077)
+    run_id = datetime.datetime.now().strftime('%Y%m%dT%H%M%S') + '-' + uuid.uuid4().hex[:6]
+    run = Path('knowledge/imports') / run_id
+    destination = ai/run
+    records = ai/'knowledge/records'
+    database = ai/'runtime/knowledge'/run_id/'search.sqlite'
+    for target in (destination, records, database.parent, ai/'tasks/imports'):
+        guard(target, ai)                  # 何も作る前に、書き込み先がワークスペース内か確認する
+    destination.mkdir(parents=True, mode=0o700)
+    records.mkdir(parents=True, exist_ok=True, mode=0o700)
+    database.parent.mkdir(parents=True, mode=0o700)
+    db = sqlite3.connect(database)
+    db.execute('CREATE TABLE documents (id TEXT PRIMARY KEY, metadata TEXT, normalized TEXT)')
+    manifest, tasks, errors = [], [], []
+    for source in config['sources']:
+        try:
+            for path, relative, exclusion in enumerate_source(source):
+                doc_id = hashlib.sha256((source['id'] + ':' + relative).encode()).hexdigest()[:20]
+                row = {'id':doc_id, 'source':source['id'], 'relative':relative, 'original':str(path),
+                       'category':category(source['id'], relative), 'status':exclusion or 'reference_only'}
+                manifest.append(row)
+                if exclusion == 'missing_root':
+                    errors.append({'source':source['id'], 'error':'missing_root', 'root':str(path)})
+                if exclusion:
+                    continue
+                before = path.stat(); row.update(bytes=before.st_size, source_mtime_ns=before.st_mtime_ns)
+                if path.suffix.lower() not in TEXT or path.name.startswith('.env'):
+                    continue
+                if before.st_size > 8 * 1024 * 1024:
+                    row['status']='size_limit'; continue
+                data = path.read_bytes(); after = path.stat()
+                if (before.st_ino, before.st_size, before.st_mtime_ns) != (after.st_ino, after.st_size, after.st_mtime_ns):
+                    row['status']='changed_during_read'; continue
+                encoding = 'utf-8-sig'
+                try:
+                    text = data.decode(encoding)
+                except UnicodeDecodeError:
+                    if path.suffix.lower() != '.csv':
+                        row['status']='encoding_unread'; continue
+                    try:
+                        encoding='cp932'; text=data.decode(encoding)
+                    except UnicodeDecodeError:
+                        row['status']='encoding_unread'; continue
+                digest = hashlib.sha256(data).hexdigest(); row['sha256']=digest
+                if SENSITIVE.search(text):
+                    row['status']='sensitive_excluded'; continue
+                snapshot = Path('knowledge/records') / (digest + '.txt')
+                if (ai/snapshot).exists():
+                    if hashlib.sha256((ai/snapshot).read_bytes()).hexdigest() != digest:
+                        raise ValueError('Existing snapshot digest mismatch: ' + str(snapshot))
+                else:
+                    with (ai/snapshot).open('xb') as f:
+                        f.write(data)
+                title = next((line.lstrip('# ').strip() for line in text.splitlines() if line.startswith('# ')), path.stem)
+                row.update(status='imported', snapshot=str(snapshot), title=title, lines=len(text.splitlines()), encoding=encoding)
+                observations = extract_tasks(row, text)
+                row['task_observations']=len(observations)
+                for task in observations:
+                    task.update(snapshot=str(snapshot), sha256=digest,
+                                current_candidate=(source['id'] + ':' + relative) in config.get('current_task_sources', []))
+                tasks.extend(observations)
+                db.execute('INSERT INTO documents VALUES (?,?,?)', (doc_id, json.dumps(row,ensure_ascii=False),norm(title+'\n'+relative+'\n'+text)))
+        except (OSError, ValueError) as error:
+            errors.append({'source':source['id'], 'error':str(error)})
+    for row in manifest:
+        if row['status'] in ('reference_only','symlink_reference'):
+            row['title']=Path(row['relative']).name
+            db.execute('INSERT INTO documents VALUES (?,?,?)',(row['id'],json.dumps(row,ensure_ascii=False),norm(row['relative'])))
+    db.commit(); db.close()
+    task_path = Path('tasks/imports')/run_id/'observations.jsonl'
+    write_rows(ai/task_path, tasks, ai)
+    write_rows(destination/'manifest.jsonl', manifest, ai)
+    summary = {'run':str(run), 'database':str(database.relative_to(ai)), 'tasks':str(task_path),
+               'observed_at':datetime.datetime.now().astimezone().isoformat(), 'statuses':dict(Counter(r['status'] for r in manifest)),
+               'categories':dict(Counter(r['category'] for r in manifest if r['status']=='imported')),
+               'task_observations':len(tasks), 'current_candidates':sum(t['current_candidate'] for t in tasks),
+               'errors':errors, 'source_config':config, 'migration_complete':False}
+    write_json(destination/'summary.json', summary, ai)
+    if errors:
+        raise RuntimeError('Import incomplete; current pointer unchanged. See '+str(destination/'summary.json'))
+    temporary = ai/'knowledge'/('current-'+run_id+'.json')
+    write_json(temporary, summary, ai)
+    os.replace(temporary, ai/'knowledge/current.json')
+    return str(run)
+
+
+def current(ai):
+    return json.loads((ai/'knowledge/current.json').read_text())
+
+
+def manifest(ai):
+    return load_rows(ai/current(ai)['run']/'manifest.jsonl')
+
+
+def read_tasks(ai, current=False):
+    pointer = globals()['current'](ai)
+    rows = load_rows(ai/pointer['tasks'])
+    return [r for r in rows if not current or r['current_candidate']]
+
+
+def local_documents(ai):
+    rows=[]
+    for folder,prefix,kind,authority in [('pages','page','curated-knowledge','derived_not_original'),('journal','journal','journal','append_only_record')]:
+        for path in sorted((ai/'knowledge'/folder).glob('*.md')):
+            text=path.read_text()
+            rows.append({'id':prefix+':'+path.stem,'original':str(path),'relative':str(path.relative_to(ai)),
+                         'category':kind,'authority':authority,'title':text.splitlines()[0].lstrip('# ') if text else path.stem,
+                         'status':'local','text':text})
+    return rows
+
+
+def search(ai, terms, limit=10, kind=None):
+    pointer = current(ai)
+    db = sqlite3.connect((ai/pointer['database']).as_uri()+'?mode=ro', uri=True)
+    normalized = [norm(term) for term in terms]
+    escaped = ['%'+t.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%' for t in normalized]
+    sql = 'SELECT metadata FROM documents WHERE ' + ' AND '.join("normalized LIKE ? ESCAPE '\\'" for _ in normalized)
+    rows = [json.loads(row[0]) for row in db.execute(sql, escaped)]
+    db.close()
+    if kind:
+        rows = [r for r in rows if r['category']==kind]
+    rows.sort(key=lambda r: (sum(t in norm(r['title']+' '+r['relative']) for t in normalized),r.get('source_mtime_ns',0)), reverse=True)
+    results, seen = [], set()
+    for document in local_documents(ai):
+        text=document.pop('text')
+        if (not kind or document['category']==kind) and all(term in norm(text) for term in normalized):
+            results.append({**document,'matches':[{'line':i,'text':line[:500]} for i,line in enumerate(text.splitlines(),1) if any(term in norm(line) for term in normalized)][:8]})
+    results=results[:limit]
+    for row in rows:
+        if len(results)>=limit: break
+        key=row.get('sha256',row['original'])
+        if key in seen:
+            continue
+        seen.add(key)
+        text = read_document(ai,row) if row['status']=='imported' else ''
+        row['matches'] = [{'line':i,'text':line[:500]} for i,line in enumerate(text.splitlines(),1) if any(t in norm(line) for t in normalized)][:8]
+        results.append(row)
+        if len(results)>=limit:
+            break
+    return results
+
+
+def show_document(ai, doc_id, start, length):
+    if doc_id.startswith(('page:','journal:')):
+        prefix,name=doc_id.split(':',1)
+        if Path(name).name!=name: raise ValueError('不正なページID')
+        path=ai/'knowledge'/('pages' if prefix=='page' else 'journal')/(name+'.md')
+        lines=path.read_text().splitlines()
+        return {'document':{'id':doc_id,'original':str(path),'authority':'derived_not_original' if prefix=='page' else 'append_only_record'},
+                'lines':[{'line':i+1,'text':lines[i]} for i in range(max(0,start-1),min(len(lines),start-1+length))]}
+    row=next(r for r in manifest(ai) if r['id']==doc_id and r['status']=='imported')
+    lines=read_document(ai,row).splitlines()
+    selected=[{'line':i+1,'text':lines[i]} for i in range(max(0,start-1),min(len(lines),start-1+length))]
+    result={'document':row,'lines':selected,'references':[]}
+    script=ai/'bin/kukuri-paths'
+    if script.exists():
+        try:
+            code=runpy.run_path(str(script)); resolver=code['Resolver'](ai)
+            for item in selected:
+                for ref in code['extract_references'](item['text']):
+                    resolved=resolver.resolve(ref['reference'],base=row['original'],record=False)
+                    result['references'].append({**resolved,'line':item['line']})
+            resolver.record(result['references'])
+        except (OSError,ValueError,KeyError) as error:
+            result['reference_error']=str(error)
+    else: result['reference_error']='Path Resolver unavailable'
+    return result
+
+
+def timeline(ai, begin, end):
+    begin=datetime.date.fromisoformat(begin); end=datetime.date.fromisoformat(end)
+    if begin>end: raise ValueError('開始日は終了日以前にしてください')
+    documents=[]
+    for row in manifest(ai)+[{k:v for k,v in r.items() if k!='text'} for r in local_documents(ai)]:
+        if row['status'] not in ('imported','local') or row['category'] not in ('journal','task-record','decision'): continue
+        match=re.match(r'(\d{4}-\d{2}-\d{2}|\d{4}-W\d{2})',Path(row['relative']).name)
+        if not match: continue
+        try:
+            if '-W' in match[1]:
+                year,week=match[1].split('-W'); day=datetime.date.fromisocalendar(int(year),int(week),1); last=day+datetime.timedelta(days=6)
+            else: day=datetime.date.fromisoformat(match[1]); last=day
+        except ValueError: continue
+        if day<=end and last>=begin: documents.append({**row,'period_start':str(day),'period_end':str(last),'date_basis':'filename'})
+    return {'documents':sorted(documents,key=lambda r:r['period_start']), 'scope':'索引内のジャーナル・TODO・判断文書。更新時刻を活動日に読み替えない。会話ログ全件を含まない。'}
+
+
+def archive_catalog(ai):
+    documents=[]; urls={}; kinds={}
+    for row in manifest(ai):
+        kind='clippings' if row['relative'].startswith(('clippings/','99_Inbox/')) else row['category']
+        if kind not in ('clippings','journal','procedure-reference'): continue
+        entry={**row,'archive_kind':kind}
+        if kind=='clippings' and row['status']=='imported':
+            text=read_document(ai,row)
+            header=text.split('---',2)[1] if text.startswith('---') and text.count('---')>=2 else ''
+            metadata={m[1]:m[2].strip().strip('"\'') for m in re.finditer(r'^(source|url|created|published|title):\s*(.+)$',header,re.M)}
+            entry['clip_metadata']=metadata; entry['relative_links']=re.findall(r'\]\((?!https?://|#)([^)]+)\)',text)
+            url=metadata.get('source',metadata.get('url'))
+            if url: urls.setdefault(url,[]).append({'id':row['id'],'sha256':row['sha256']})
+        documents.append(entry); kinds.setdefault(kind,Counter())[row['status']]+=1
+    groups=[{'url':url,'documents':rows} for url,rows in urls.items() if len(rows)>1]
+    summary={k:dict(v) for k,v in kinds.items()}
+    summary.update(same_url_groups=len(groups),same_url_different_content_groups=sum(len({r['sha256'] for r in g['documents']})>1 for g in groups))
+    payload={'generated_at':datetime.datetime.now().astimezone().isoformat(),'import_run':current(ai)['run'],'summary':summary,'documents':documents,'url_groups':groups}
+    temporary=ai/'archive'/('catalog-'+uuid.uuid4().hex+'.tmp'); write_json(temporary,payload,ai)
+    os.replace(temporary,ai/'archive/catalog.json')
+    return summary
+
+
+def verify(ai, original=False):
+    errors, checked, originals = [], 0, 0
+    rows = manifest(ai)
+    db = sqlite3.connect((ai/current(ai)['database']).as_uri()+'?mode=ro', uri=True)
+    ids = {row[0] for row in db.execute('SELECT id FROM documents')}; db.close()
+    for row in rows:
+        if row['status']!='imported':
+            continue
+        try:
+            if hashlib.sha256((ai/row['snapshot']).read_bytes()).hexdigest()!=row['sha256']:
+                errors.append({'id':row['id'],'error':'snapshot_hash_mismatch'})
+            if row['id'] not in ids:
+                errors.append({'id':row['id'],'error':'missing_search_entry'})
+            if original:
+                originals+=1
+                if hashlib.sha256(Path(row['original']).read_bytes()).hexdigest()!=row['sha256']:
+                    errors.append({'id':row['id'],'error':'original_changed_since_import'})
+            checked+=1
+        except OSError as error:
+            errors.append({'id':row['id'],'error':str(error)})
+    documents = {r['id']:r for r in rows if r['status']=='imported'}
+    tasks = read_tasks(ai)
+    actual = Counter(t['document_id'] for t in tasks)
+    for doc in documents.values():
+        if actual[doc['id']] != doc['task_observations']:
+            errors.append({'id':doc['id'],'error':'task_count_mismatch'})
+    expected = {}
+    for doc in documents.values():
+        if actual[doc['id']]:
+            expected.update({t['id']:t for t in extract_tasks(doc,read_document(ai,doc))})
+    for task in tasks:
+        original_task = expected.get(task['id'])
+        if not original_task or any(task.get(k)!=v for k,v in original_task.items()) or task['sha256']!=documents[task['document_id']]['sha256']:
+            errors.append({'id':task['id'],'error':'task_evidence_mismatch'})
+    review_count=0
+    for filename,collection in (('reviewed.json','items'),('reconciliation.json','issues')):
+        path=ai/'tasks'/filename
+        if path.exists():
+            for item in json.loads(path.read_text())[collection]:
+                for reference in item.get('evidence',[]):
+                    data=(ai/reference['snapshot']).read_bytes()
+                    lines=data.decode('utf-8-sig').splitlines()
+                    if hashlib.sha256(data).hexdigest()!=reference['sha256'] or reference['line']>len(lines) or lines[reference['line']-1]!=reference['quote']:
+                        errors.append({'id':item['id'],'error':'review_evidence_mismatch'})
+                    review_count+=1
+    return {'documents_checked':checked, 'originals_checked':originals, 'task_rows_checked':len(tasks), 'review_evidence_checked':review_count, 'errors':errors}
+
+
+def main():
+    parser=argparse.ArgumentParser(description=__doc__)
+    sub=parser.add_subparsers(dest='command',required=True)
+    sub.add_parser('import')
+    sub.add_parser('status')
+    sub.add_parser('archive')
+    check=sub.add_parser('verify'); check.add_argument('--original',action='store_true')
+    find=sub.add_parser('search'); find.add_argument('terms',nargs='+'); find.add_argument('--kind'); find.add_argument('--limit',type=int,default=10)
+    show=sub.add_parser('show'); show.add_argument('id'); show.add_argument('--start',type=int,default=1); show.add_argument('--lines',type=int,default=100)
+    dates=sub.add_parser('timeline'); dates.add_argument('--from',dest='begin',required=True); dates.add_argument('--to',dest='end',required=True)
+    task=sub.add_parser('tasks'); task.add_argument('--current',action='store_true'); task.add_argument('--query',default=''); task.add_argument('--limit',type=int)
+    args=parser.parse_args()
+    if args.command=='import':
+        result=import_sources(AI,json.loads((AI/'registry/knowledge-sources.json').read_text()))
+    elif args.command=='status':
+        result=current(AI)
+    elif args.command=='verify':
+        result=verify(AI,args.original)
+    elif args.command=='search':
+        result=search(AI,args.terms,max(1,min(args.limit,100)),args.kind)
+    elif args.command=='tasks':
+        result=[r for r in read_tasks(AI,args.current) if norm(args.query) in norm(r['text']+' '+r['context'])][:args.limit]
+    elif args.command=='timeline':
+        result=timeline(AI,args.begin,args.end)
+    elif args.command=='archive':
+        result=archive_catalog(AI)
+    else:
+        result=show_document(AI,args.id,args.start,args.lines)
+    print(json.dumps(result,ensure_ascii=False,indent=2))
+    return 2 if isinstance(result,dict) and result.get('errors') else 0
+
+
+if __name__=='__main__':
+    try:
+        sys.exit(main())
+    except (OSError,ValueError,RuntimeError,sqlite3.Error,StopIteration) as error:
+        print('停止: '+str(error),file=sys.stderr); sys.exit(2)

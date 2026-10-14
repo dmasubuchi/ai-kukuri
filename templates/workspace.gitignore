@@ -1,0 +1,7 @@
+# 実データ・製品固有の設定・認証・履歴は、ワークスペースのGitに入れない
+/projects/
+/input/
+/output/
+/runtime/
+/knowledge/records/
+/knowledge/imports/
