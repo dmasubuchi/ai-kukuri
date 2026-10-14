@@ -55,7 +55,7 @@ KINDS = {
     'result': '実作業の結果',
     'observation': '観察・未確認の情報',
 }
-ENTRY = re.compile(r'^### (j-(\d{8})-(\d{4})-(\d{2})) \| (\w+) \| (\d{2}:\d{2})\s*$')
+ENTRY = re.compile(r'^### (j-(\d{8})-(\d{4})-(\d{2,})) \| (\w+) \| (\d{2}:\d{2})\s*$')
 FIELD = re.compile(r'^- ([^:：]+)[:：]\s*(.*)$')
 WIKI_REF = re.compile(r'^wiki:([a-z0-9][a-z0-9-]*)#([A-Za-z0-9_-]+)\s*=\s*(.+)$')
 
@@ -145,7 +145,10 @@ def add(ai, kind, text, source, author, date, time, wiki, tasks):
         fcntl.flock(lf, fcntl.LOCK_EX)
         existing = parse_file(path)
         stem = 'j-' + date.replace('-', '') + '-' + time.replace(':', '')
-        seq = sum(1 for e in existing if e['id'].startswith(stem)) + 1
+        used = [int(e['id'].rsplit('-', 1)[1]) for e in existing if e['id'].startswith(stem + '-')]
+        seq = max(used, default=0) + 1
+        if seq > 9999:
+            raise ValueError('同じ分の記録が多すぎます（上限9999）。時刻を分けてください')
         entry_id = '%s-%02d' % (stem, seq)
         body = ['### %s | %s | %s' % (entry_id, kind, time), '- 記録者: ' + author, '- 出典: ' + source,
                 '- 種類: ' + KINDS[kind], '- 内容: ' + text.strip()]

@@ -62,6 +62,18 @@ class JournalTests(Base):
         self.add('result', '二件目', '2026-10-01', '11:00')
         self.assertTrue(path.read_text().startswith(before))
 
+    def test_more_than_99_entries_in_one_minute_keep_unique_ids_and_parse(self):
+        import runpy
+        api = runpy.run_path(str(self.ai / 'bin/kukuri-journal'))
+        ids = [api['add'](self.ai, 'result', '記録%d' % i, 'src', 'tester', '2026-10-01', '09:00', [], []) for i in range(1, 102)]
+        self.assertEqual(len(set(ids)), 101)
+        self.assertEqual(ids[98], 'j-20261001-0900-99')
+        self.assertEqual(ids[99], 'j-20261001-0900-100')
+        self.assertEqual(ids[100], 'j-20261001-0900-101')
+        parsed = api['parse_file'](self.ai / 'knowledge/journal/2026-10-01.md')
+        self.assertEqual([e['id'] for e in parsed], ids)
+        self.assertEqual(api['find_entry'](self.ai, ids[100])['fields']['内容'], '記録101')
+
 
 class WikiTests(Base):
     REF = 'wiki:acme-portal#hosting = 本番環境はクラウドAで運用する'

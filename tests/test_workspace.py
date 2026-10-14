@@ -94,6 +94,41 @@ class WorkspaceTests(unittest.TestCase):
         self.assertTrue((ws / 'registry/paths.json').is_file())
         self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', self.base / 'does-not-exist', ok=False)
 
+    def test_repair_refuses_symlinks_that_lead_outside_and_creates_nothing_first(self):
+        outside = self.base / 'outside'
+        outside.mkdir()
+        for name in ('bin', 'knowledge', 'runtime', 'skills'):
+            ws = self.base / ('ws-' + name)
+            ws.mkdir()
+            (ws / name).symlink_to(outside)
+            self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', ws, ok=False)
+            self.assertEqual(list(outside.iterdir()), [], name)
+            self.assertEqual([p.name for p in ws.iterdir()], [name], 'nothing may be created before the guard')
+
+    def test_repair_refuses_a_symlinked_file_and_a_symlinked_cli(self):
+        ws = self.base / 'ws'
+        self.sh(ROOT / 'scripts/init-workspace.sh', ws)
+        target = self.base / 'outside.txt'
+        target.write_text('KEEP')
+        (ws / 'runtime/mcp.json').unlink()
+        (ws / 'runtime/mcp.json').symlink_to(target)
+        self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', ws, ok=False)
+        self.assertEqual(target.read_text(), 'KEEP')
+        (ws / 'runtime/mcp.json').unlink()
+        (ws / 'bin/kukuri-wiki').unlink()
+        (ws / 'bin/kukuri-wiki').symlink_to(target)
+        self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', ws, ok=False)
+        self.assertEqual(target.read_text(), 'KEEP')
+
+    def test_data_directories_may_be_symlinks_and_are_not_written(self):
+        ws = self.base / 'ws'
+        disk = self.base / 'other-disk'
+        disk.mkdir()
+        ws.mkdir()
+        (ws / 'projects').symlink_to(disk)
+        self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', ws)
+        self.assertEqual(list(disk.iterdir()), [])
+
 
 if __name__ == '__main__':
     unittest.main()

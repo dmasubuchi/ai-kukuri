@@ -21,6 +21,26 @@ if [ "$mode" = repair ] && [ ! -d "$target" ]; then
 fi
 mkdir -p "$target"
 target=$(CDPATH= cd -- "$target" && pwd -P)
+# Refuse to write through symlinks. Checked before anything is created.
+# projects/ input/ output/ may be symlinks (e.g. another disk): they are only created if missing, never written.
+for rel in bin rules rules/common.md skills registry registry/projects.json registry/paths.json \
+           runtime runtime/mcp.json runtime/machine.json tasks tasks/baseline.json \
+           knowledge knowledge/journal knowledge/pages knowledge/records \
+           AGENTS.md CLAUDE.md .gitignore; do
+  if [ -L "$target/$rel" ]; then
+    echo "stop: refusing to write through a symlink: $target/$rel" >&2; exit 2
+  fi
+done
+for f in "$kit"/bin/*; do
+  if [ -L "$target/bin/$(basename "$f")" ]; then
+    echo "stop: refusing to write through a symlink: $target/bin/$(basename "$f")" >&2; exit 2
+  fi
+done
+for d in "$kit"/skills/*/; do
+  if [ -L "$target/skills/$(basename "$d")" ] || [ -L "$target/skills/$(basename "$d")/SKILL.md" ]; then
+    echo "stop: refusing to write through a symlink: $target/skills/$(basename "$d")" >&2; exit 2
+  fi
+done
 for d in bin rules skills registry runtime tasks projects input output \
          knowledge/journal knowledge/pages knowledge/records; do
   mkdir -p "$target/$d"
