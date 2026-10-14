@@ -10,7 +10,7 @@
 | 記録の取り込み・検索（`kukuri-memory`）: import/search/show/timeline/tasks/verify/archive | 実装済み | 単体試験 |
 | 参照の解決・検査（`kukuri-paths`）: resolve/check/report | 実装済み | 単体試験 |
 | 製品別の隔離起動（`kukuri-claude` `kukuri-codex`） | 実装済み（代替の実行ファイルでの試験） | 単体試験。実際のClaude Code・Codexでの自動試験は無し |
-| 共通Skills 3つ（journal-wiki / recall / project） | 実装済み（文書） | 形式のみ |
+| 共通Skills 3つ（journal-wiki / recall / project）と、製品の探索先への登録（シンボリックリンク） | 実装済み（文書＋登録）。実際の製品での読み込みは、このキットでは未検証（[setup](setup.md)） | 登録の試験のみ |
 | Herdr での併用 | **文書のみ**（`docs/herdr.md`）。専用のツールは無い | 確認手順と構文を記載。キットによる自動試験は無し |
 | AI間のチャット・メッセージ配送 | **未実装** | — |
 | 外部Subagent・外部エージェントとの連携 | **未実装** | — |

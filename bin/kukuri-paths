@@ -35,6 +35,14 @@ def guard(path, workspace=None):
     return path
 
 
+def open_append(path, workspace=None):
+    guard(path.parent, workspace)
+    if path.is_symlink():
+        raise ValueError('シンボリックリンクへは書き込みません: ' + str(path))
+    fd = os.open(str(path), os.O_WRONLY | os.O_APPEND | os.O_CREAT | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+    return os.fdopen(fd, 'a', encoding='utf-8')
+
+
 def save(path, value, workspace=None):
     guard(path.parent, workspace)
     path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
@@ -212,12 +220,12 @@ class Resolver:
     def record(self, results):
         guard(self.state, self.ai)
         self.state.mkdir(parents=True,exist_ok=True,mode=0o700)
-        with (self.state/'lock').open('a') as lock:
+        with open_append(self.state/'lock',self.ai) as lock:
             fcntl.flock(lock,fcntl.LOCK_EX)
             state=load(self.state/'state.json',{})
             unique={}
             for result in sorted(results,key=lambda r:r.get('critical',False)): unique[result['key']]=result
-            with (self.state/'history.jsonl').open('a') as history:
+            with open_append(self.state/'history.jsonl',self.ai) as history:
                 for result in unique.values():
                     key=result['key']; old=state.get(key,{})
                     changed=any(old.get(k)!=result.get(k) for k in ('status','path','rule','sha256','revoked'))

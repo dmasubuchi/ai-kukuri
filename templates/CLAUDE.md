@@ -7,3 +7,5 @@
 - `runtime/machine.json` — このマシンの実パス
 
 案件名は台帳と照合し、毎回 `cd` を依頼しないでください。読み込めない場合は報告し、推測で別の設定へ切り替えないでください。Claude Code の機能は活用して構いません。設定・認証・履歴は専用の `CLAUDE_CONFIG_DIR`（`runtime/claude`）を使います。
+
+共通の手順（Skills）は `skills/<名前>/SKILL.md` にあります。作業に関係するものを読んでから進めてください。専用の設定ディレクトリでは `runtime/claude/skills/` から参照されます。

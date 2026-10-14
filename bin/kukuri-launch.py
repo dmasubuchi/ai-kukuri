@@ -29,6 +29,9 @@ def main():
     if not binary or not Path(binary).is_file() or not os.access(binary, os.X_OK):
         raise ValueError('CLI not found: set runtime/launchers.json for ' + product)
     directory = root/'runtime'/product
+    real_root, real_dir = os.path.realpath(root), os.path.realpath(directory)
+    if not (real_dir == real_root or real_dir.startswith(real_root + os.sep)):
+        raise ValueError('設定ディレクトリがワークスペース外へ解決されます（symlink）: ' + str(directory))
     env = dict(os.environ)
     env['PATH'] = str(Path(binary).parent) + os.pathsep + env.get('PATH', '')
     if product == 'codex':
@@ -41,7 +44,7 @@ def main():
                    '--mcp-config', str(root/'runtime/mcp.json'), '--append-system-prompt-file', str(root/'CLAUDE.md')]
     if args == ['--check']:
         print(json.dumps({'product':product, 'root':str(root), 'binary':binary,
-                          'config_directory':str(directory), 'options':options}, ensure_ascii=False, indent=2))
+                          'config_directory':str(directory), 'isolated':True, 'options':options}, ensure_ascii=False, indent=2))
         return
     os.umask(0o077)
     os.chdir(root)

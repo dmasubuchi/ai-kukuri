@@ -57,5 +57,36 @@ class TasksWriteTests(Base):
         self.assertEqual(list(self.outside.iterdir()), [])
 
 
+class AppendFileSymlinkTests(Base):
+    def test_paths_history_and_lock_files_are_not_followed(self):
+        (self.ai / 'registry').mkdir()
+        (self.ai / 'registry/projects.json').write_text('{"projects": [{"id": "sample-portal", "directory": "sample-portal"}]}')
+        (self.ai / 'runtime/path-repair').mkdir(parents=True)
+        for name in ('history.jsonl', 'lock'):
+            victim = self.base / ('victim-' + name)
+            victim.write_text('ORIGINAL\n')
+            link = self.ai / 'runtime/path-repair' / name
+            if link.exists() or link.is_symlink():
+                link.unlink()
+            link.symlink_to(victim)
+            p = self.run_tool('kukuri-paths', 'resolve', 'project:sample-portal/missing.md')
+            self.assertNotEqual(p.returncode, 0, name)
+            self.assertEqual(victim.read_text(), 'ORIGINAL\n', name)
+            link.unlink()
+
+
+class LauncherIsolationTests(Base):
+    def test_check_refuses_a_product_directory_that_resolves_outside(self):
+        shutil.copy(ROOT / 'bin/kukuri-launch.py', self.ai / 'bin/kukuri-launch.py')
+        (self.ai / 'runtime').mkdir()
+        (self.ai / 'runtime/codex').symlink_to(self.outside)
+        fake = self.base / 'fake-cli'
+        fake.write_text('#!/bin/sh\nexit 0\n'); fake.chmod(0o755)
+        (self.ai / 'runtime/launchers.json').write_text(json.dumps({'codex': str(fake)}))
+        p = self.run_tool('kukuri-launch.py', 'codex', '--check')
+        self.assertNotEqual(p.returncode, 0)
+        self.assertIn('ワークスペース外', p.stderr)
+
+
 if __name__ == '__main__':
     unittest.main()

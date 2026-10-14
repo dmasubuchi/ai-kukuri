@@ -1,7 +1,14 @@
-# 実データ・製品固有の設定・認証・履歴は、ワークスペースのGitに入れない
+# 実データ・製品固有の設定・認証・履歴は、ワークスペースのGitに入れない。
+# Gitで追跡するのは、規約・台帳・Skills・コマンド（AGENTS.md CLAUDE.md rules/ registry/ skills/ bin/）だけ。
+# 知識（knowledge/）とTODO（tasks/）を版管理したいときは、別のPrivateリポジトリを使う。
 /projects/
 /input/
 /output/
 /runtime/
-/knowledge/records/
-/knowledge/imports/
+/knowledge/
+/tasks/
+/.claude/
+/.agents/
+.*.tmp
+*.lock
+.DS_Store

@@ -144,6 +144,54 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual((p.stat().st_mode & 0o777, p.read_bytes()), (mode, data), p.name)
         self.assertTrue(os.access(ws / 'bin/kukuri-journal', os.X_OK))
 
+    def test_generated_gitignore_keeps_records_todos_and_runtime_out_of_git(self):
+        ws = self.base / 'ws'
+        self.sh(ROOT / 'scripts/init-workspace.sh', ws)
+        env = dict(os.environ)
+        def run(*a):
+            return subprocess.run(a, cwd=str(ws), capture_output=True, text=True, env=env)
+        self.assertEqual(run('git', 'init', '-q').returncode, 0)
+        j = run('python3', '-B', 'bin/kukuri-journal', 'add', '--kind', 'decision', '--text', '架空の決定', '--source', 's',
+                '--author', 'a', '--date', '2026-03-02', '--time', '10:00', '--wiki', 'wiki:acme#k = 値')
+        self.assertEqual(j.returncode, 0, j.stderr)
+        self.assertEqual(run('python3', '-B', 'bin/kukuri-wiki', 'apply', '--write').returncode, 0)
+        status = run('git', 'status', '--short', '--untracked-files=all').stdout.splitlines()
+        paths = [l[3:] for l in status]
+        for forbidden in ('knowledge/', 'tasks/', 'runtime/', 'projects/', 'input/', 'output/', '.claude', '.agents'):
+            self.assertFalse([p for p in paths if p.startswith(forbidden)], (forbidden, paths))
+        for rel in ('knowledge/journal/2026-03-02.md', 'knowledge/pages/acme.md', 'tasks/baseline.json',
+                    'tasks/events.jsonl', 'knowledge/pages/.wiki.lock'):
+            if (ws / rel).exists():
+                self.assertEqual(run('git', 'check-ignore', '-q', rel).returncode, 0, rel)
+        self.assertIn('AGENTS.md', paths)
+
+    def test_shared_skills_are_registered_where_products_look_for_them(self):
+        ws = self.base / 'ws'
+        self.sh(ROOT / 'scripts/init-workspace.sh', ws)
+        for base in ('runtime/claude/skills', '.agents/skills'):
+            for name in ('kukuri-journal-wiki', 'kukuri-recall', 'kukuri-project'):
+                link = ws / base / name
+                self.assertTrue(link.is_symlink(), base + '/' + name)
+                self.assertTrue((link / 'SKILL.md').is_file())
+                self.assertTrue(os.path.realpath(link).startswith(os.path.realpath(ws)))
+        (ws / '.agents/skills/kukuri-recall').unlink()
+        (ws / '.agents/skills/kukuri-recall').mkdir()
+        (ws / '.agents/skills/kukuri-recall/SKILL.md').write_text('mine')
+        self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', ws)
+        self.assertEqual((ws / '.agents/skills/kukuri-recall/SKILL.md').read_text(), 'mine')
+
+    def test_journal_and_wiki_are_searchable_before_any_import(self):
+        ws = self.base / 'ws'
+        self.sh(ROOT / 'scripts/init-workspace.sh', ws)
+        subprocess.run(['python3', '-B', str(ws / 'bin/kukuri-journal'), 'add', '--kind', 'result', '--text', 'FRESHな結果',
+                        '--source', 's', '--author', 'a', '--date', '2026-03-02', '--time', '10:00',
+                        '--wiki', 'wiki:acme#k = FRESHな現状'], check=True, capture_output=True)
+        subprocess.run(['python3', '-B', str(ws / 'bin/kukuri-wiki'), 'apply', '--write'], check=True, capture_output=True)
+        p = subprocess.run(['python3', '-B', str(ws / 'bin/kukuri-memory'), 'search', 'FRESH'], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        kinds = {r['category'] for r in json.loads(p.stdout)}
+        self.assertEqual(kinds, {'curated-knowledge', 'journal'})
+
 
 if __name__ == '__main__':
     unittest.main()

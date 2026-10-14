@@ -54,7 +54,7 @@ KUKURIは、すべてのAIを支配する存在ではなく、異なるAIの間�
 git clone <this-repo> kukuri-kit && cd kukuri-kit
 sh examples/demo.sh            # 架空データで Journal → Wiki → TODO を一巡する
 scripts/init-workspace.sh ~/kukuri-workspace   # 自分のワークスペースを作る
-cd ~/kukuri-workspace
+cd ~/kukuri-workspace          # 以降は、作成したワークスペースの中で作業する
 bin/kukuri-journal add --kind decision --author me --source "定例メモ" \
   --text "ホスティング先はクラウドAに決めた" \
   --wiki "wiki:my-portal#hosting = ホスティング先はクラウドA"
@@ -63,7 +63,11 @@ bin/kukuri-wiki apply --write
 bin/kukuri-wiki check
 ```
 
-テスト: `cd tests && python3 -B -m unittest discover -p 'test_*.py'`
+テスト（リポジトリの直下から。サブシェルなので、作業ディレクトリは変わりません）:
+
+```sh
+(cd tests && python3 -B -m unittest discover -p 'test_*.py')
+```
 
 ## 構成
 

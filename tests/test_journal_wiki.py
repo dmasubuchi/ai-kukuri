@@ -254,5 +254,68 @@ class SecurityTests(Base):
         self.assertEqual(outside.read_text(), 'ORIGINAL\n')
 
 
+class ReviewRegressionTests(Base):
+    """独立レビューで再現した問題の回帰試験。"""
+
+    def snapshot(self, slug='acme-portal'):
+        return self.page(slug)
+
+    def test_resolved_candidate_does_not_come_back_on_reapply(self):
+        self.add('observation', 'maybe A', '2026-03-01', wiki=['wiki:acme-portal#x = maybe A'])
+        self.add('decision', 'decided B', '2026-03-02', wiki=['wiki:acme-portal#x = decided B'])
+        self.run_tool('kukuri-wiki', 'apply', '--write')
+        first = self.snapshot()
+        self.assertIn('decided B', first.split('## 未確認・矛盾')[0])
+        again = self.run_tool('kukuri-wiki', 'apply', '--write')
+        self.assertEqual({a['action'] for a in again['actions']}, {'skip'})
+        self.assertEqual(self.snapshot(), first)
+        self.run_tool('kukuri-wiki', 'apply', '--write')
+        self.assertEqual(self.snapshot(), first)
+
+    def test_one_entry_with_several_keys_is_applied_per_key(self):
+        self.add('observation', '観察', '2026-03-01',
+                 wiki=['wiki:acme-portal#x = x候補', 'wiki:acme-portal#y = y候補'])
+        self.add('decision', '決定', '2026-03-02',
+                 wiki=['wiki:acme-portal#x = x確定', 'wiki:acme-portal#y = y確定'])
+        self.run_tool('kukuri-wiki', 'apply', '--write')
+        now = self.snapshot().split('## 未確認・矛盾')[0]
+        self.assertIn('x確定', now)
+        self.assertIn('y確定', now)
+
+    def test_proposal_restating_a_decision_keeps_the_decision_evidence(self):
+        self.add('decision', '決定A', '2026-03-01', wiki=['wiki:acme-portal#x = A'])
+        self.add('proposal', '再提案A', '2026-03-02', wiki=['wiki:acme-portal#x = A'])
+        plan = self.run_tool('kukuri-wiki', 'apply', '--write')
+        self.assertIn('skip', [a['action'] for a in plan['actions']])
+        line = [l for l in self.snapshot().splitlines() if l.startswith('- [x]')][0]
+        self.assertIn('kind: decision', line)
+        self.assertIn('j-20260301-1000-01', line)
+
+    def test_concurrent_apply_loses_nothing_and_leaves_no_temp_files(self):
+        for i in range(6):
+            self.add('decision', '決定%d' % i, '2026-03-0%d' % (i + 1), wiki=['wiki:acme-portal#k%d = 値%d' % (i, i)])
+        procs = [subprocess.Popen([sys.executable, '-B', str(self.ai / 'bin/kukuri-wiki'), 'apply', '--write'],
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(6)]
+        results = [p.communicate() + (p.returncode,) for p in procs]
+        self.assertEqual([r[2] for r in results], [0] * 6, [r[1] for r in results])
+        page = self.snapshot()
+        for i in range(6):
+            self.assertIn('値%d' % i, page.split('## 未確認・矛盾')[0])
+        self.assertEqual(sorted(p.name for p in (self.ai / 'knowledge/pages').glob('.*.tmp')), [])
+
+    def test_non_padded_date_and_time_are_rejected_not_silently_misfiled(self):
+        for date, time in (('2026-3-2', '09:00'), ('2026-03-02', '9:0'), ('2026-03-02', '09:5')):
+            self.run_tool('kukuri-journal', 'add', '--kind', 'result', '--text', 'x', '--source', 's',
+                          '--author', 'a', '--date', date, '--time', time, ok=False)
+        self.assertEqual(self.run_tool('kukuri-journal', 'list')['entries'], [])
+
+    def test_read_arguments_cannot_leave_the_intended_directories(self):
+        outside = Path(self.temp.name).resolve() / 'outside.md'
+        outside.write_text('# 外部\n\n<!-- kukuri-wiki:v1 -->\n')
+        self.run_tool('kukuri-wiki', 'show', '../../outside', ok=False)
+        self.run_tool('kukuri-journal', 'list', '--date', '../../../outside-journal', ok=False)
+        self.run_tool('kukuri-journal', 'evidence', 'j-20260101-0000-01/../../x', ok=False)
+
+
 if __name__ == '__main__':
     unittest.main()

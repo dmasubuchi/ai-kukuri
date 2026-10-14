@@ -18,7 +18,7 @@ cd kukuri-kit
 
 ```sh
 sh examples/demo.sh
-cd tests && python3 -B -m unittest discover -p 'test_*.py'
+(cd tests && python3 -B -m unittest discover -p 'test_*.py')   # サブシェル。作業ディレクトリは変わらない
 ```
 
 ## 3. ワークスペースを作る
@@ -28,6 +28,21 @@ scripts/init-workspace.sh ~/kukuri-workspace
 ```
 
 空でないディレクトリには作成しません。コマンドは `~/kukuri-workspace/bin/` に **コピー** されます（各コマンドは、自分の場所からワークスペースを決めます。シンボリックリンクにしないでください）。
+
+## 共通Skillsの登録先
+
+`init-workspace.sh` は、`skills/<名前>/` を、製品が探す場所へ相対シンボリックリンクで登録します。
+
+| 製品 | 登録先 | 状態 |
+|---|---|---|
+| Claude Code（`kukuri-claude` 経由。`CLAUDE_CONFIG_DIR=runtime/claude`） | `runtime/claude/skills/<名前>` | 私的な運用では動作を確認済み。このキットの自動試験は、リンクの存在までを検査 |
+| Codex | `.agents/skills/<名前>` | 公式資料に基づく配置。実機での読み込みは、このキットでは未検証 |
+
+入口文書（`AGENTS.md` `CLAUDE.md`）にも、Skills の場所を書いています。
+
+## 知識・TODOを版管理するとき
+
+生成される `.gitignore` は、`knowledge/` と `tasks/` を除外します（業務記録・顧客情報を、誤って規約のリポジトリに入れないため）。版管理したいときは、別のPrivateリポジトリを使ってください。
 
 ## 4. 案件を登録する
 

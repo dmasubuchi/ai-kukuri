@@ -227,6 +227,8 @@ def current(ai):
 
 
 def manifest(ai):
+    if not (ai/'knowledge/current.json').exists():
+        return []
     return load_rows(ai/current(ai)['run']/'manifest.jsonl')
 
 
@@ -248,13 +250,15 @@ def local_documents(ai):
 
 
 def search(ai, terms, limit=10, kind=None):
-    pointer = current(ai)
-    db = sqlite3.connect((ai/pointer['database']).as_uri()+'?mode=ro', uri=True)
+    rows = []
     normalized = [norm(term) for term in terms]
-    escaped = ['%'+t.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%' for t in normalized]
-    sql = 'SELECT metadata FROM documents WHERE ' + ' AND '.join("normalized LIKE ? ESCAPE '\\'" for _ in normalized)
-    rows = [json.loads(row[0]) for row in db.execute(sql, escaped)]
-    db.close()
+    if (ai/'knowledge/current.json').exists():   # 取り込み前でも、Journal・Wikiは検索できる
+        pointer = current(ai)
+        db = sqlite3.connect((ai/pointer['database']).as_uri()+'?mode=ro', uri=True)
+        escaped = ['%'+t.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')+'%' for t in normalized]
+        sql = 'SELECT metadata FROM documents WHERE ' + ' AND '.join("normalized LIKE ? ESCAPE '\\'" for _ in normalized)
+        rows = [json.loads(row[0]) for row in db.execute(sql, escaped)]
+        db.close()
     if kind:
         rows = [r for r in rows if r['category']==kind]
     rows.sort(key=lambda r: (sum(t in norm(r['title']+' '+r['relative']) for t in normalized),r.get('source_mtime_ns',0)), reverse=True)

@@ -6,21 +6,26 @@ Journal = 何が起きたか / Living Wiki = 現在分かっていること / TO
 """
 import argparse
 import datetime as dt
+import fcntl
 import json
 import os
 import re
 import runpy
 import sys
 import unicodedata
+import uuid
 from pathlib import Path
 
 AI = Path(__file__).resolve().parents[1]
 journal = runpy.run_path(str(Path(__file__).resolve().parent / 'kukuri-journal'))
 KINDS = journal['KINDS']
 guard_write = journal['guard_write']
+open_append = journal['open_append']
 WIKI_REF = journal['WIKI_REF']
 MARKER = '<!-- kukuri-wiki:v1 -->'
-SEC_NOW, SEC_OPEN, SEC_HIST = '現在わかっていること', '未確認・矛盾', '履歴'
+SEC_NOW, SEC_OPEN, SEC_HIST, SEC_APPLIED = '現在わかっていること', '未確認・矛盾', '履歴', '反映済みの記録'
+ID_IN_TEXT = re.compile(r'j-[0-9]{8}-[0-9]{4}-[0-9]{2,}', re.ASCII)
+SLUG = re.compile(r'[a-z0-9][a-z0-9-]*')
 CONFIRMING = ('decision', 'result')       # 確定の根拠になる種類
 CLAIM = re.compile(r'^- \[([A-Za-z0-9_-]+)\] (.*)$')
 STALE_DAYS = 90
@@ -43,13 +48,15 @@ def parse_page(path):
     text = path.read_text(encoding='utf-8')
     if MARKER not in text:
         return None
-    page = {'title': path.stem, 'claims': [], 'history': []}
+    page = {'title': path.stem, 'claims': [], 'history': [], 'applied': set()}
+    has_applied = False
     section = None
     for line in text.splitlines():
         if line.startswith('# ') and page['title'] == path.stem:
             page['title'] = line[2:].strip()
         elif line.startswith('## '):
             section = line[3:].strip()
+            has_applied = has_applied or section == SEC_APPLIED
         elif section in (SEC_NOW, SEC_OPEN):
             m = CLAIM.match(line)
             if not m:
@@ -67,6 +74,18 @@ def parse_page(path):
             page['claims'].append(claim)
         elif section == SEC_HIST and line.startswith('- '):
             page['history'].append(line[2:])
+        elif section == SEC_APPLIED and line.startswith('- '):
+            page['applied'].add(line[2:].strip())
+    if not has_applied:
+        # 反映済みの記録の節が無い旧ページ: 確定・未確認の出典と、履歴の [key] と記録IDから復元する
+        for c in page['claims']:
+            if c['source']:
+                page['applied'].add('%s#%s' % (c['source'], c['key']))
+        for h in page['history']:
+            m = re.search(r'\[([A-Za-z0-9_-]+)\]', h)
+            if m:
+                for rid in ID_IN_TEXT.findall(h):
+                    page['applied'].add('%s#%s' % (rid, m.group(1)))
     return page
 
 
@@ -83,6 +102,8 @@ def render(page, today):
     out += ['## ' + SEC_NOW] + [line(c) for c in confirmed] + ['']
     out += ['## ' + SEC_OPEN] + [line(c) for c in opened] + ['']
     out += ['## ' + SEC_HIST] + ['- ' + h for h in page['history']] + ['']
+    out += ['## ' + SEC_APPLIED, '（機械が読む欄。どの記録のどのキーを反映したかを保持し、再実行で結果を変えないために使う）']
+    out += ['- ' + a for a in sorted(page.get('applied', ()))] + ['']
     return '\n'.join(out)
 
 
@@ -108,7 +129,7 @@ def plan(ai, entries):
                                     'reason': '既存の自由形式ページは自動更新しない。人が内容を確認して移す'})
                     continue
             else:
-                pages[slug] = {'title': slug, 'claims': [], 'history': [], 'new': True}
+                pages[slug] = {'title': slug, 'claims': [], 'history': [], 'applied': set(), 'new': True}
         page = pages[slug]
         if page is None:
             actions.append({'entry': e['id'], 'page': slug, 'key': key, 'action': 'manual_legacy_page',
@@ -123,12 +144,8 @@ def plan(ai, entries):
 
 def decide(page, e, key, text):
     current = [c for c in page['claims'] if c['key'] == key]
-    for c in current:
-        if c['source'] == e['id']:
-            return {'action': 'skip', 'reason': '同じ記録は反映済み'}
-    for h in page['history']:
-        if e['id'] in h:
-            return {'action': 'skip', 'reason': '履歴に反映済み'}
+    if '%s#%s' % (e['id'], key) in page['applied']:
+        return {'action': 'skip', 'reason': '同じ記録の同じキーは反映済み'}
     confirmed = [c for c in current if c['status'] == '確定']
     opened = [c for c in current if c['status'] != '確定']
     confirms = e['kind'] in CONFIRMING
@@ -138,8 +155,9 @@ def decide(page, e, key, text):
     if confirmed:
         c = confirmed[0]
         if norm(c['text']) == norm(text):
-            return ({'action': 'refresh', 'reason': 'より新しい記録で同じ内容を再確認'}
-                    if e['date'] > c['as_of'] else {'action': 'skip', 'reason': '同じ内容で、より古い記録'})
+            if confirms and e['date'] > c['as_of']:
+                return {'action': 'refresh', 'reason': 'より新しい決定・結果で同じ内容を再確認'}
+            return {'action': 'skip', 'reason': '確定済みの内容の再言及（提案・観察・古い記録）は、根拠を置き換えない'}
         newer = e['date'] > c['as_of']
         owner_over = e['kind'] == 'decision' and c['kind'] != 'decision' and e['date'] >= c['as_of']
         if confirms and (newer or owner_over):
@@ -159,6 +177,8 @@ def decide(page, e, key, text):
 
 def apply_action(page, e, key, text, act):
     a = act['action']
+    if a not in ('skip', 'manual_legacy_page'):
+        page['applied'].add('%s#%s' % (e['id'], key))
     new = {'key': key, 'text': text, 'as_of': e['date'], 'source': e['id'], 'kind': e['kind'], 'status': '確定'}
     if a == 'add':
         page['claims'].append(new)
@@ -228,6 +248,34 @@ def check(ai):
     return {'stats': stats, 'problems': problems}
 
 
+def run_plan(args, write):
+    entries = journal['all_entries'](AI, args.date)
+    if args.entry:
+        entries = [e for e in entries if e['id'] in args.entry]
+    actions, pages = plan(AI, entries)
+    result = {'actions': actions, 'written': []}
+    if write:
+        today = dt.date.today().isoformat()
+        touched = {a['page'] for a in actions if a['action'] not in ('skip', 'manual_legacy_page')}
+        for slug in sorted(touched):                    # 先に全ページの書き込み先を確認する
+            guard_write(AI, pages_dir(AI) / (slug + '.md'))
+        pages_dir(AI).mkdir(parents=True, exist_ok=True)
+        for slug in sorted(touched):
+            page = pages[slug]; page.pop('new', None)
+            target = guard_write(AI, pages_dir(AI) / (slug + '.md'))
+            temporary = target.with_name('.%s.%d.%s.tmp' % (target.name, os.getpid(), uuid.uuid4().hex[:8]))
+            fd = os.open(str(temporary), os.O_WRONLY | os.O_CREAT | os.O_EXCL | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+            try:
+                with os.fdopen(fd, 'w', encoding='utf-8') as out:
+                    out.write(render(page, today))
+                os.replace(temporary, target)
+            finally:
+                if temporary.exists():
+                    temporary.unlink()
+            result['written'].append(slug)
+    return result
+
+
 def main():
     ap = argparse.ArgumentParser(description='Living Wiki (what is known now)')
     sub = ap.add_subparsers(dest='command', required=True)
@@ -241,28 +289,21 @@ def main():
     args = ap.parse_args()
     try:
         if args.command in ('plan', 'apply'):
-            entries = journal['all_entries'](AI, args.date)
-            if args.entry:
-                entries = [e for e in entries if e['id'] in args.entry]
-            actions, pages = plan(AI, entries)
-            result = {'actions': actions, 'written': []}
             if args.command == 'apply' and args.write:
-                today = dt.date.today().isoformat()
-                touched = {a['page'] for a in actions if a['action'] not in ('skip', 'manual_legacy_page')}
-                for slug in sorted(touched):                    # 先に全ページの書き込み先を確認する
-                    guard_write(AI, pages_dir(AI) / (slug + '.md'))
+                # 読み取り・判断・書き込みを、同じロックの中で行う（同時applyで更新を失わない）
+                guard_write(AI, pages_dir(AI) / '.wiki.lock')
                 pages_dir(AI).mkdir(parents=True, exist_ok=True)
-                for slug in sorted(touched):
-                    page = pages[slug]; page.pop('new', None)
-                    target = guard_write(AI, pages_dir(AI) / (slug + '.md'))
-                    temporary = target.with_name('.' + target.name + '.tmp')
-                    fd = os.open(str(temporary), os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0), 0o600)
-                    with os.fdopen(fd, 'w', encoding='utf-8') as out:
-                        out.write(render(page, today))
-                    os.replace(temporary, target)
-                    result['written'].append(slug)
+                with open_append(AI, pages_dir(AI) / '.wiki.lock') as lock:
+                    fcntl.flock(lock, fcntl.LOCK_EX)
+                    result = run_plan(args, write=True)
+            else:
+                result = run_plan(args, write=False)
         elif args.command == 'show':
+            if not SLUG.fullmatch(args.slug):
+                raise ValueError('slug は小文字英数字とハイフンです')
             page = parse_page(pages_dir(AI) / (args.slug + '.md'))
+            if page is not None:
+                page['applied'] = sorted(page['applied'])
             result = page if page is not None else {'error': '新形式のページではありません'}
         else:
             result = check(AI)

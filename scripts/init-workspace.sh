@@ -24,7 +24,8 @@ target=$(CDPATH= cd -- "$target" && pwd -P)
 # Refuse to write through symlinks. Checked before anything is created.
 # projects/ input/ output/ may be symlinks (e.g. another disk): they are only created if missing, never written.
 for rel in bin rules rules/common.md skills registry registry/projects.json registry/paths.json \
-           runtime runtime/mcp.json runtime/machine.json tasks tasks/baseline.json \
+           runtime runtime/mcp.json runtime/machine.json runtime/claude runtime/claude/skills \
+           .claude .agents .agents/skills tasks tasks/baseline.json \
            knowledge knowledge/journal knowledge/pages knowledge/records \
            AGENTS.md CLAUDE.md .gitignore; do
   if [ -L "$target/$rel" ]; then
@@ -60,6 +61,15 @@ for d in "$kit"/skills/*/; do
   name=$(basename "$d")
   mkdir -p "$target/skills/$name"
   put "$d/SKILL.md" "$target/skills/$name/SKILL.md"
+done
+# Register the shared skills where each product looks for them (relative links, created only if missing)
+mkdir -p "$target/runtime/claude/skills" "$target/.agents/skills"
+for d in "$kit"/skills/*/; do
+  name=$(basename "$d")
+  l="$target/runtime/claude/skills/$name"
+  [ -e "$l" ] || [ -L "$l" ] || ln -s "../../../skills/$name" "$l"
+  l="$target/.agents/skills/$name"
+  [ -e "$l" ] || [ -L "$l" ] || ln -s "../../skills/$name" "$l"
 done
 put "$kit/templates/AGENTS.md" "$target/AGENTS.md"
 put "$kit/templates/CLAUDE.md" "$target/CLAUDE.md"
