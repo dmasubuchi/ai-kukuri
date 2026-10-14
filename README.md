@@ -1,97 +1,114 @@
 <p align="center">
-  <img src="docs/images/kukuri-hime.jpg" alt="菊理媛神のイメージ（白い菊・鏡・虹・霊峰）" width="420">
+  <img src="docs/images/kukuri-hime.jpg" alt="Illustration of Kukuri-hime: white chrysanthemums, a mirror, a rainbow and a sacred mountain" width="420">
 </p>
+
+<p align="center"><b>English</b> | <a href="README.ja.md">日本語</a></p>
 
 # KUKURI Kit
 
 **Knowledge Unification Kit for Updates, Recall & Integration**
 
-複数のAI（Claude Code、Codex など）が、日々の仕事を記録し、過去の経緯を保持しながら、現在の知識とTODOを更新するための、小さなローカルツールキットです。外部サービスにも、常駐プロセスにも依存しません（Python 3 の標準ライブラリのみ）。
+A small, local toolkit that lets several AIs (Claude Code, Codex and others) record their daily work, keep the history of how things came to be, and update current knowledge and TODOs from it, with sources. No services, no daemon: Python 3 standard library and plain files only.
 
-> 状態: **v0.1 候補（Private・未公開）**。実装済みの機能と将来構想は、[docs/features.md](docs/features.md) で分けています。
+> Status: **v0.1 candidate (private, not published)**. What is implemented and what is only an idea are listed separately in [docs/features.md](docs/features.md) (Japanese).
 
-## 名前の由来 — KUKURI（菊理媛神）
+## The name — KUKURI (Kukuri-hime-no-kami)
 
-KUKURIという名前は、日本神話に登場する女神、**菊理媛神（ククリヒメノカミ）** に由来します。
+The name comes from **Kukuri-hime-no-kami (菊理媛神)**, a goddess of Japanese mythology.
 
-『日本書紀』の一書には、黄泉の国の境で対立するイザナギとイザナミの前に、菊理媛神が現れる場面があります。
+In one variant account of the *Nihon Shoki*, Izanagi and Izanami stand opposed to each other at the border of Yomi, the land of the dead. There, Kukuri-hime appears and speaks.
 
-菊理媛神が何を語ったのか、神話には記されていません。ただ、その言葉を聞いたイザナギはそれを良しとし、二神はその場を離れたと伝えられています。
+The myth does not record what she said. It only tells that Izanagi heard her, approved, and left the place.
 
-その名の「くくり」は、日本語の **「括る（くくる）」** に通じるとも解釈され、菊理媛神は後世、異なるものを取り持ち、縁を結ぶ神として信仰されてきました。
+Her name, "Kukuri", is also read as connected to the Japanese word **"kukuru" (括る, to bind, to tie together)**, and in later ages she has been revered as a deity who mediates between what is different and ties bonds.
 
-現代のAIも、それぞれ異なる能力、記憶、道具、作業環境を持っています。
+Today's AIs each have their own abilities, memories, tools and working environments.
 
-KUKURIは、それらを一つに置き換えるのではなく、**違いを生かしたまま、知識と仕事をつなぐ** ために生まれました。
+KUKURI is not meant to replace them with one; it exists to **connect knowledge and work while keeping the differences**.
 
-Claude Code、Codex、その他のAIを取り持ち、過去の記録（Journal）、現在の知識（Living Wiki）、これからの仕事（TODO）を結びます。
+It stands between Claude Code, Codex and other AIs, and ties together past records (Journal), current knowledge (Living Wiki) and the work ahead (TODO).
 
-KUKURIは、すべてのAIを支配する存在ではなく、異なるAIの間に立って、それぞれの能力を生かす仕組みです。
+KUKURI is not a ruler over all AIs. It is a mechanism that stands between different AIs and lets each of them do what it does best.
 
-日本神話に着想を得た、AIと知識と仕事を「括る」ためのオープンソースプロジェクトです。
+An open-source project inspired by Japanese mythology, for "binding" AI, knowledge and work together.
 
-*神話の描写は『日本書紀』の一書に基づきます。「括る」との関係は語源の定説ではなく、伝統的な解釈として書いています。白山比咩神社の公式説明（[白山比咩神社「由緒・御祭神」](https://www.shirayama.or.jp/about/)）でも、この結び付けが紹介されています。*
+*The myth follows a variant account of the Nihon Shoki. The link with "kukuru" is a traditional interpretation, not an established etymology; the official explanation of Shirayama-hime Shrine also presents this connection ([Shirayama-hime Shrine: about / enshrined deities](https://www.shirayama.or.jp/about/), Japanese).*
 
-> 挿絵は、プロジェクトオーナーが用意したイラスト（菊理媛神のイメージ）です。コードのライセンス（MIT）の対象に含めません。出所と利用条件は、公開前にオーナーが確認します（[NOTICE](NOTICE.md)）。
+> The illustration was provided by the project owner (declared as generated with ChatGPT). It is not covered by the code license; see [NOTICE.md](NOTICE.md).
 
-## 3つを分ける
+## Three things, kept apart
 
-| 種類 | 問い | 場所 | 道具 |
+| Kind | Question | Where | Tool |
 |---|---|---|---|
-| **Journal** | 何が起きたか | `knowledge/journal/YYYY-MM-DD.md` | `kukuri-journal`（追記のみ） |
-| **Living Wiki** | 現在分かっていること | `knowledge/pages/` | `kukuri-wiki` |
-| **TODO** | これから行うこと | `tasks/` | `kukuri-tasks` |
+| **Journal** | What happened? | `knowledge/journal/YYYY-MM-DD.md` | `kukuri-journal` (append only) |
+| **Living Wiki** | What do we know now? | `knowledge/pages/` | `kukuri-wiki` |
+| **TODO** | What will we do? | `tasks/` | `kukuri-tasks` |
 
-- Journalの各記録は、種類（本人の決定・相手の依頼・AIの提案・実作業の結果・観察）、出典、時刻を持つ。AIの提案は、決定として扱われない。
-- Wikiは、Journalから `plan` → 確認 → `apply --write` で更新する。後日の決定・結果だけが旧記述を置換できる。判断できない矛盾は、出典・日付つきで「未確認・矛盾」に両方残す。
-- TODOの状態変更には、根拠（原文の行・引用・ハッシュ）が必要。Journalの記録を根拠にできる（`kukuri-journal evidence`）。
+- Every Journal entry has a kind (owner decision / request / AI proposal / work result / observation), a source and a time. An AI proposal is never treated as a decision.
+- The Wiki is rebuilt from the Journal in date-time order (`plan` → review → `apply --write`). The result does not depend on append order or on when `apply` ran. A later decision or result replaces an older statement; contradictions that cannot be decided are kept side by side, with sources and dates, as "unconfirmed".
+- Changing a TODO's state needs evidence (a quoted line with its hash). A Journal entry can be that evidence (`kukuri-journal evidence`).
 
-## クイックスタート
+## Install
 
-必要なもの: Python 3.9 以上（Python 3.12 で検証。CIでの対象は .github/workflows/test.yml）、POSIX シェル（macOS / Linux）。
+Requires Python 3.9+ and a POSIX shell (macOS / Linux). Node.js is only needed for `npx`. Windows is not supported yet.
 
 ```sh
-git clone <this-repo> kukuri-kit && cd kukuri-kit
-sh examples/demo.sh            # 架空データで Journal → Wiki → TODO を一巡する
-scripts/init-workspace.sh ~/kukuri-workspace   # 自分のワークスペースを作る
-cd ~/kukuri-workspace          # 以降は、作成したワークスペースの中で作業する
-bin/kukuri-journal add --kind decision --author me --source "定例メモ" \
-  --text "ホスティング先はクラウドAに決めた" \
-  --wiki "wiki:my-portal#hosting = ホスティング先はクラウドA"
-bin/kukuri-wiki plan          # 何も書かない
+# 1. npm (once published to npm). Until then, run it straight from GitHub:
+npx kukuri-kit init ~/kukuri-workspace
+npx github:<owner>/kukuri-kit init ~/kukuri-workspace
+
+# 2. From a checkout
+git clone <this repository> kukuri-kit && cd kukuri-kit
+./install.sh ~/kukuri-workspace
+
+# 3. One line (give the URL of the archive)
+curl -fsSL <URL of install.sh> | KUKURI_KIT_TARBALL=<URL of the archive> sh -s -- ~/kukuri-workspace
+```
+
+Check your environment with `npx kukuri-kit doctor`, or just watch it work with `npx kukuri-kit demo` (fictional data only).
+
+## First steps
+
+```sh
+cd ~/kukuri-workspace
+bin/kukuri-journal add --kind decision --author me --source "weekly meeting notes" \
+  --text "Hosting is decided: Cloud A" \
+  --wiki "wiki:my-portal#hosting = Hosted on Cloud A"
+bin/kukuri-wiki plan            # writes nothing
 bin/kukuri-wiki apply --write
 bin/kukuri-wiki check
 ```
 
-テスト（リポジトリの直下から。サブシェルなので、作業ディレクトリは変わりません）:
+Run the tests from the repository root (a subshell, so your working directory does not change):
 
 ```sh
 (cd tests && python3 -B -m unittest discover -p 'test_*.py')
 ```
 
-## 構成
+## What is in the box
 
 ```
 bin/        kukuri-journal  kukuri-wiki  kukuri-tasks  kukuri-memory  kukuri-paths
-            kukuri-launch.py  kukuri-claude  kukuri-codex
-rules/      common.md             製品に依存しない共通規約
+            kukuri-launch.py  kukuri-claude  kukuri-codex  kukuri-kit.js (for npx)
+rules/      common.md             the shared, product-independent rules
 skills/     kukuri-journal-wiki  kukuri-recall  kukuri-project
-templates/  AGENTS.md  CLAUDE.md  registry-projects.json  workspace.gitignore
-scripts/    init-workspace.sh
+templates/  AGENTS.md  CLAUDE.md  registry-projects.json  ...
+scripts/    init-workspace.sh     install.sh at the root
 examples/   demo.sh
-docs/       architecture.md  features.md  setup.md  herdr.md  security-and-license.md  roadmap.md
+docs/       architecture.md  features.md  setup.md  herdr.md  security-and-license.md  roadmap.md  (Japanese)
 tests/
 ```
 
-詳細: [アーキテクチャ](docs/architecture.md)／[機能一覧（実装済み・将来構想）](docs/features.md)／[セットアップ](docs/setup.md)／[Herdrとの使い方](docs/herdr.md)／[セキュリティ・ライセンス確認](docs/security-and-license.md)／[ロードマップ](docs/roadmap.md)
+The documents under `docs/` and the rule/skill texts are written in Japanese for now; English translations are on the [roadmap](docs/roadmap.md).
 
-## 設計上の約束
+## Design promises
 
-- 原本は変更しない。保存する写しはハッシュ付き。
-- 見つからないことを、存在しないことと言わない。未確認は未確認として残す。
-- 送信・投稿・支払・削除・公開は、人の明示確認の後に行う。このキットは、それらを行う機能を持たない。
-- 公式のClaude Code・Codex・Herdrの機能を再実装しない。起動と保存先の規約だけを提供する。
+- Originals are never modified; copies are kept with their hash.
+- "Not found" is never reported as "does not exist". Unconfirmed stays unconfirmed.
+- Sending, posting, paying, deleting and publishing happen only after a human confirms. This kit has no feature that does them.
+- It does not re-implement the official Claude Code, Codex or Herdr. It only provides storage rules and isolated launching.
+- It never writes outside the workspace, through symlinks or otherwise.
 
-## ライセンス
+## License
 
-MIT License（候補）。詳細は [LICENSE](LICENSE) と [docs/security-and-license.md](docs/security-and-license.md)。
+MIT License (candidate; to be confirmed by the owner before any public release). See [LICENSE](LICENSE) and [docs/security-and-license.md](docs/security-and-license.md).

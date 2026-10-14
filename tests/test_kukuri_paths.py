@@ -4,6 +4,8 @@ from pathlib import Path
 import runpy
 import tempfile
 import unittest
+
+import compat
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -47,6 +49,7 @@ class PathsTests(unittest.TestCase):
         self.assertNotIn('path',result)
         self.assertFalse(result['loss_confirmed'])
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_permission_error_is_not_missing_and_external_symlink_is_not_adopted(self):
         original=self.old/'projects/a.txt'; original.write_text('source')
         real_stat=Path.stat

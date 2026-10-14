@@ -1,36 +1,36 @@
 ---
 name: kukuri-journal-wiki
-description: 日々の仕事をJournal（何が起きたか）に記録し、Living Wiki（現在分かっていること）とTODO（これから行うこと）を根拠付きで更新する。
+description: Record daily work in the Journal (what happened), and update the Living Wiki (what is currently known) and TODO (what will be done) with evidence.
 ---
 
-3つを分ける。Journal=過去の記録と根拠、Living Wiki=現在の知識、TODO=担当・期限・状態・根拠つきの未来の仕事。同じ内容を3か所へ重複して正本にしない。
+Keep the three separate. Journal = past records and their evidence; Living Wiki = current knowledge; TODO = future work with owner, deadline, state, and evidence. Do not make the same content canonical in three places.
 
-## 記録 → 更新の流れ
+## Flow: record -> update
 
-1. **記録**: `bin/kukuri-journal add --kind <種類> --text '<1行の事実>' --source '<出典>' --author <claude|codex|人名> [--wiki 'wiki:<slug>#<key> = <現在分かっていること>'] [--task <ID>]`
-   種類は `decision`（本人の決定）／`request`（相手の依頼）／`proposal`（AIの提案）／`result`（実作業の結果）／`observation`（観察・未確認）。AIの提案を本人の決定として書かない。出典がない事実は書かない。追記のみ。過去の記録を書き換えない。
-2. **計画**: `bin/kukuri-wiki plan [--date YYYY-MM-DD]`。何も書かない。各項目の `action` と `reason` を読む。
-3. **反映**: 内容を確認してから `bin/kukuri-wiki apply --write`。既存の自由形式ページ（`manual_legacy_page`）は自動更新されない。人が内容を確認して移す。
-3b. 旧版のページ（反映済みの記録の欄が無い）は、`migration_required` で止まる。内容を確認して、`bin/kukuri-wiki migrate <slug> --write` でJournalから再構成する。手で編集されたページ（Journalに無い出典の主張）は `manual_review` で止まる。
-4. **検査**: `bin/kukuri-wiki check`。出典の欠落・未来日付・競合の件数を見る。
+1. **Record**: `bin/kukuri-journal add --kind <kind> --text '<one-line fact>' --source '<source>' --author <claude|codex|person name> [--wiki 'wiki:<slug>#<key> = <what is currently known>'] [--task <ID>]`
+   Kinds are `decision` (owner decision) / `request` (request from a counterpart) / `proposal` (AI proposal) / `result` (work result) / `observation` (observation, unconfirmed). Never record an AI proposal as the owner's decision. Do not write facts that have no source. Append-only; do not rewrite past records.
+2. **Plan**: `bin/kukuri-wiki plan [--date YYYY-MM-DD]`. It writes nothing. Read the `action` and `reason` of each item.
+3. **Apply**: after reviewing the content, run `bin/kukuri-wiki apply --write`. Existing free-form pages (`manual_legacy_page`) are not updated automatically; a person reviews the content and moves it over.
+3b. Pages from an older version (without a section for applied records) stop at `migration_required`. Review the content and rebuild from the Journal with `bin/kukuri-wiki migrate <slug> --write`. Pages edited by hand (claims whose source is not in the Journal) stop at `manual_review`.
+4. **Check**: `bin/kukuri-wiki check`. Look at the counts of missing sources, future dates, and conflicts.
 
-## 矛盾の扱い（自動で決めてよいのは日時と種類で優劣が明確なときだけ）
+## Handling contradictions (decide automatically only when date/time and kind give a clear winner)
 
-Wikiは、Journalの全記録を日時順に再構成します。追記の順番や `apply` の回数で結果は変わりません。
+The Wiki is rebuilt from all Journal records in date/time order. The result does not change with the order of appends or the number of `apply` runs.
 
-- 後日の `decision`/`result` → 旧記述を履歴へ出典・日付つきで移して置換（supersede）
-- `proposal`/`observation`/`request`、または同日・古い日付 → 両方を「未確認・矛盾」に残す（conflict）。確定扱いにしない
-- 未確認事項は、後日の `decision`/`result` で解消（resolve）。旧候補は履歴に残す
-- 判断できないものは未確認のまま。両方の出典と日付を提示する
+- A later `decision`/`result` -> move the old statement to history with source and date, and replace it (supersede)
+- `proposal`/`observation`/`request`, or the same day or an older date -> keep both under "unconfirmed / contradictions" (`未確認・矛盾`) (conflict). Do not treat either as settled
+- Unconfirmed items are resolved by a later `decision`/`result` (resolve). The old candidate stays in history
+- Anything that cannot be judged stays unconfirmed. Present both sources and dates
 
-## TODOとの接続
+## Connection to TODO
 
-- 完了・状態変更の根拠: `bin/kukuri-journal evidence <記録ID>` が返すJSONを、`bin/kukuri-tasks add/update` の `evidence` に使う。日次ファイルは追記されるため、その時点の写しを `knowledge/records/` に保全して根拠にする
-- 状態変更は `bin/kukuri-tasks` を使う。Wikiの文面だけでTODOを完了にしない。Journalの `TODO:` 欄は参照であり、状態の正本ではない
-- 未確認のTODOを完了扱いにしない。外部Issueの状態をローカルで上書きしない
+- Evidence for completion or state changes: use the JSON returned by `bin/kukuri-journal evidence <record ID>` as the `evidence` of `bin/kukuri-tasks add/update`. Because daily files are appended to, preserve a copy of the file as of that moment in `knowledge/records/` and use it as the evidence
+- Change state with `bin/kukuri-tasks`. Do not mark a TODO done on the strength of Wiki wording alone. The `TODO:` field in the Journal is a reference, not the canonical source of state
+- Do not treat an unconfirmed TODO as done. Do not overwrite the state of an external Issue locally
 
-## 注意
+## Notes
 
-- 顧客名・金額・人物の記録は、本人の指示と出典の範囲だけ。秘密情報（認証・トークン・口座）は書かない
-- 複数AIが同時に同じページを編集しない。`apply` の前に最新のページを読み直す
-- 検索は `bin/kukuri-memory search`（整理済みページ・新ジャーナルが先に返る）。回答時は出典ID・日付を添える
+- Record customer names, amounts, and people only within the scope of the owner's instructions and the source. Do not write secrets (credentials, tokens, bank accounts)
+- Multiple AIs must not edit the same page at the same time. Re-read the latest page before `apply`
+- Search with `bin/kukuri-memory search` (organized pages and new journals are returned first). When answering, attach the source ID and date

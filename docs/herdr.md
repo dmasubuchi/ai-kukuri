@@ -1,40 +1,42 @@
-# Herdr との併用
+English | [日本語](ja/herdr.md)
 
-KUKURI Kit は、Herdr の機能を再実装しません。Herdr は、複数のAIエージェントを動かす端末ワークスペースです。ここでは、併用の考え方と、使うコマンドの確認方法を書きます。専用のツールは、v0.1にはありません（[機能一覧](features.md)）。
+# Using with Herdr
 
-## 併用の考え方
+KUKURI Kit does not reimplement Herdr's features. Herdr is a terminal workspace that runs multiple AI agents. This page describes the approach to using them together and how to verify the commands involved. There is no dedicated tool in v0.1 ([features](features.md)).
 
-- Herdr のペインの中で `bin/kukuri-claude` と `bin/kukuri-codex` を起動する。製品ごとの設定は `runtime/` に隔離される。
-- 担当ファイルを分けて、同時編集を避ける。分担は、ワークスペース内のMarkdownに書く。
-- 完了や依頼の連絡に、Herdr のペイン読み取りとプロンプト送信を使う。連絡できないときは、自動化せず、待ち状態を明示する。
+## Approach
 
-## 使う前の確認
+- Launch `bin/kukuri-claude` and `bin/kukuri-codex` inside Herdr panes. Per-product settings are isolated under `runtime/`.
+- Divide the files each agent is responsible for, to avoid concurrent edits. Write the division of work in Markdown inside the workspace.
+- Use Herdr's pane reading and prompt sending for completion notices and requests. When contact is not possible, do not automate; state the waiting status explicitly.
 
-Herdr のクライアントとサーバーは、版が合っている必要があります。使う前に、次を確認してください。
+## Verify before use
 
-```sh
-command -v herdr          # 実行されるCLIの場所
-herdr --version           # クライアントの版
-herdr status server       # サーバーの版・プロトコル・互換性（compatible: yes か）
-herdr agent --help        # その版で使えるサブコマンド
-```
-
-古いクライアントで新しいサーバーへ接続すると、サブコマンドが「不明」になったり、対象が見つからなかったりします。これは、機能が無いのではなく、版の不一致です。`herdr update`、または対応するクライアントの実行ファイルを使ってください。
-
-## 連絡の例（Herdr 0.8 系で確認された構文）
+The Herdr client and server must be on matching versions. Before use, check the following.
 
 ```sh
-herdr agent list                                 # 起動中のエージェントとペインID
-herdr agent read <pane-id|agent-name> --lines 30 # 端末の出力を読む
-herdr agent prompt <pane-id|agent-name> "確認してください: docs/handoff.md" # プロンプトを送る
-herdr agent start <name> --kind <kind> --pane <pane-id>  # 既存のペインでエージェントを起動し、名前を付ける
+command -v herdr          # location of the CLI that will run
+herdr --version           # client version
+herdr status server       # server version, protocol, compatibility (compatible: yes?)
+herdr agent --help        # subcommands available in that version
 ```
 
-- 宛先には、`herdr agent list` に出る **実在するペインID**、または **自分で付けたエージェント名**（`agent start` または `agent rename`）を使う。名前を付けていないエージェントを、名前で指定しない。
-- `herdr agent send` は、0.8 系の構文ではありません（`agent prompt` を使う）。
-- 具体的な構文は版で変わります。必ず `herdr agent --help` を確認してください。
+Connecting to a newer server with an old client can make subcommands "unknown" or targets not found. This is a version mismatch, not a missing feature. Run `herdr update`, or use a matching client executable.
 
-## このキットが行わないこと
+## Example of contacting an agent (syntax confirmed on Herdr 0.8 series)
 
-- Herdr の設定・セッション・キー割り当ての変更
-- エージェント間のメッセージ配送の自動化（未実装）
+```sh
+herdr agent list                                 # running agents and pane IDs
+herdr agent read <pane-id|agent-name> --lines 30 # read terminal output
+herdr agent prompt <pane-id|agent-name> "確認してください: docs/handoff.md" # send a prompt
+herdr agent start <name> --kind <kind> --pane <pane-id>  # start an agent in an existing pane and name it
+```
+
+- For the target, use a **real pane ID** shown by `herdr agent list`, or an **agent name you assigned yourself** (`agent start` or `agent rename`). Do not address an agent by name if you have not named it.
+- `herdr agent send` is not syntax of the 0.8 series (use `agent prompt`).
+- The exact syntax changes between versions. Always check `herdr agent --help`.
+
+## What this kit does not do
+
+- Change Herdr's settings, sessions or key bindings
+- Automate message delivery between agents (not implemented)

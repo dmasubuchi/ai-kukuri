@@ -7,9 +7,12 @@ import subprocess
 import tempfile
 import unittest
 
+import compat
+
 ROOT = Path(__file__).resolve().parents[1]
 
 
+@unittest.skipIf(compat.IS_WINDOWS, 'the wrappers are POSIX shell scripts; on Windows run bin/kukuri-launch.py directly')
 class LaunchTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()

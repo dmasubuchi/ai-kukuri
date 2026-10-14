@@ -2,7 +2,6 @@
 """Shared local task state. History is append-only; every state change needs evidence."""
 import argparse
 import datetime as dt
-import fcntl
 import hashlib
 import json
 import os
@@ -10,6 +9,24 @@ from pathlib import Path
 import re
 import sys
 import uuid
+
+try:
+    import fcntl
+
+    def lock_exclusive(handle):
+        fcntl.flock(handle, fcntl.LOCK_EX)
+except ImportError:                      # Windows: no fcntl; use a byte lock instead
+    import msvcrt
+    import time
+
+    def lock_exclusive(handle):
+        handle.seek(0)
+        while True:
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                return
+            except OSError:
+                time.sleep(0.05)
 
 AI = Path(__file__).resolve().parents[1]
 STATES = {'unconfirmed','active','waiting','blocked','done','cancelled','external'}
@@ -144,7 +161,7 @@ def main():
     guard_write(AI,AI/'tasks/.lock')
     (AI/'tasks').mkdir(exist_ok=True,mode=0o700)
     with open_append(AI,AI/'tasks/.lock') as lock:
-        fcntl.flock(lock,fcntl.LOCK_EX)
+        lock_exclusive(lock)
         if args.command=='init':
             baseline=guard_write(AI,AI/'tasks/baseline.json')
             if not baseline.exists():

@@ -1,9 +1,9 @@
 ---
 name: kukuri-project
-description: 案件名から対象Repoを特定し、正式成果物・個人用成果物・知識の保存先を決める。
+description: Identify the target Repo from a project name, and decide where to save official deliverables, personal deliverables, and knowledge.
 ---
 
-1. `registry/projects.json` の名前・別名と、依頼の案件名を照合する。実パスは `runtime/machine.json` の `projects_root` と台帳の `directory` を結合する。
-2. 一意に特定できたら、そのRepoの `AGENTS.md` / `CLAUDE.md` / README を確認してから作業する。複数候補のときだけ確認する。未登録の案件のパスを推測しない。
-3. 保存先は `rules/common.md` の表に従う。案件の正式成果物は案件Repo、単発・個人用は `output/<仕事ID>/`、再利用する知識は `knowledge/`、これからの仕事は `tasks/`。
-4. 台帳に載っていることは、書き込み・公開の許可ではない。
+1. Match the names and aliases in `registry/projects.json` against the project name in the request. The real path is `projects_root` in `runtime/machine.json` combined with the registry's `directory`.
+2. Once uniquely identified, check that Repo's `AGENTS.md` / `CLAUDE.md` / README before working. Ask for confirmation only when there are multiple candidates. Do not guess the path of an unregistered project.
+3. Follow the table in `rules/common.md` for where to save. A project's official deliverables go in the project Repo, one-off or personal work in `output/<job ID>/`, reusable knowledge in `knowledge/`, and upcoming work in `tasks/`.
+4. Being listed in the registry is not permission to write or publish.

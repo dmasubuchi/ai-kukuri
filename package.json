@@ -1,0 +1,30 @@
+{
+  "name": "kukuri-kit",
+  "version": "0.1.0",
+  "description": "KUKURI Kit: Journal / Living Wiki / TODO for workspaces shared by several AIs (Claude Code, Codex, ...). Local, standard-library Python.",
+  "license": "MIT",
+  "private": true,
+  "bin": {
+    "kukuri-kit": "bin/kukuri-kit.js"
+  },
+  "files": [
+    "bin",
+    "rules",
+    "skills",
+    "templates",
+    "locales",
+    "scripts",
+    "examples",
+    "docs",
+    "install.sh",
+    "README.md",
+    "README.ja.md",
+    "LICENSE",
+    "NOTICE.md"
+  ],
+  "engines": {
+    "node": ">=16"
+  },
+  "keywords": ["ai", "claude-code", "codex", "journal", "wiki", "todo", "knowledge"],
+  "os": ["darwin", "linux"]
+}

@@ -1,48 +1,51 @@
-# セキュリティ・ライセンス確認
+English | [日本語](ja/security-and-license.md)
 
-状態: **公開前の確認の途中**（Private候補）。確認した範囲と、未確認の範囲を分けて書く。
+# Security and license review
 
-## 1. 含まれないもの
+Status: **pre-publication review in progress** (private candidate). What has been checked and what has not are described separately.
 
-| 項目 | 結果 |
+## 1. What is not included
+
+| Item | Result |
 |---|---|
-| 実データ（知識・記録・TODO・入力・成果物・実行時設定・認証・会話履歴） | 含まない。`tests/test_hygiene.py` が、`runtime/` `knowledge/` `tasks/` などのディレクトリが無いことを検査 |
-| 個人のホーム絶対パス・メールアドレス・トークン・秘密鍵 | 含まない。同試験が、追跡対象のファイルを検査（`/Users/<名前>` `/home/<名前>`、メール、各種トークン、秘密鍵のパターン） |
-| 旧環境のGit履歴 | 含まない。このリポジトリは、新規の `git init` から始めた |
-| 実在の顧客・人物・金額 | 含まない。サンプル・試験は、すべて架空（Acme・Sample Portal など） |
+| Real data (knowledge, records, TODOs, inputs, deliverables, runtime settings, credentials, conversation history) | Not included. `tests/test_hygiene.py` checks that directories such as `runtime/` `knowledge/` `tasks/` do not exist |
+| Personal absolute home paths, email addresses, tokens, private keys | Not included. The same test checks tracked files (patterns for `/Users/<name>` `/home/<name>`, email addresses, various tokens, private keys) |
+| Git history of the old environment | Not included. This repository was started from a fresh `git init` |
+| Real customers, people or amounts | Not included. Samples and tests are all fictional (Acme, Sample Portal, etc.) |
 
-## 2. 書き込みの安全性（実装済み・試験あり）
+## 2. Write safety (implemented and tested)
 
-- Journal・Wiki・TODO・記録・索引・参照修復の書き込みは、ワークスペース外へ解決されるパス（symlink経由を含む）を拒否する。最終要素がsymlinkの場合も拒否する。
-- Journalの構造フィールド（内容・出典・記録者・更新・TODO・日付・時刻）に、改行・制御文字・Unicodeの行/段落区切りを許さない。記録境界の注入を防ぐ。
-- 参照修復の履歴・ロック、起動する製品の設定ディレクトリも同じ規則（外部へ解決される場合は拒否）。
-- 読み取りの引数（日付・slug・記録ID）は、形式を厳密に検証し、意図したディレクトリの外を読まない。
-- 同時のWiki更新は、ロックの中で行う。
-- 原本は変更しない。取り込み元が欠けたとき、現在の索引を置き換えない。
+- Writes of Journal, Wiki, TODO, records, index and reference repair reject paths that resolve outside the workspace (including via symlinks). They also reject the case where the final element is a symlink.
+- Structural fields of the Journal (content, source, recorder, update, TODO, date, time) do not allow newlines, control characters or Unicode line/paragraph separators. This prevents record-boundary injection.
+- The history and lock of reference repair, and the settings directory of launched products, follow the same rule (rejected if they resolve outside).
+- Read arguments (date, slug, record ID) are strictly validated for format and never read outside the intended directory.
+- Concurrent Wiki updates are performed inside a lock.
+- Originals are not modified. When an import source is missing, the current index is not replaced.
 
-## 3. ライセンス
+## 3. License
 
-| 対象 | 状態 |
+| Subject | Status |
 |---|---|
-| このリポジトリのコード・文書 | MIT License（**候補**。公開前に、所有者が確定する） |
-| 外部のソースコード・ライブラリ | **同梱していない**。Python標準ライブラリだけを使う（`import` を確認） |
-| 外部のSkills・プラグイン | **同梱していない**。`skills/` の3つは、このリポジトリで書いたもの |
-| 音声生成・ラジオ制作 | **含めていない**。音声モデルの利用条件（キャラクター・音声ライブラリ）の確認が必要なため |
-| 挿絵（`docs/images/`） | 所有者の申告では、ChatGPT（GPT）で生成した画像。コードのMITとは別（[NOTICE](../NOTICE.md)）。配布条件の決定とサービス規約の確認は、Public化前の残件 |
-| 実行時に利用する外部CLI（Claude Code・Codex・Herdr） | 同梱しない。各製品の利用条件に従う |
+| Code and documentation of this repository | MIT License (**candidate**. The owner will finalize it before publication) |
+| External source code and libraries | **Not bundled**. Only the Python standard library is used (`import` statements checked) |
+| External Skills and plugins | **Not bundled**. The three in `skills/` were written in this repository |
+| Audio generation and radio production | **Not included**, because the terms of use of audio models (characters, voice libraries) must be checked |
+| Illustrations (`docs/images/`) | According to the owner's declaration, images generated with ChatGPT (GPT). Separate from the MIT license of the code ([NOTICE](../NOTICE.md)). Deciding the distribution terms and checking the service terms remain open before going public |
+| External CLIs used at runtime (Claude Code, Codex, Herdr) | Not bundled. Follow each product's terms of use |
+| npm package | No dependencies (no `dependencies`). `private: true` prevents accidental publication |
 
-### 確認した出典
-- README「名前の由来」: 白山比咩神社の公式サイト（https://www.shirayama.or.jp/about/ の「御祭神」の節）に、二神の仲裁の説明と、「くくり」と「括る」を結び付ける信仰上の説明があることを、独立レビューで確認した。READMEは、神社の文章を逐語引用していない。『日本書紀』一書の描写は、オーナーが指定した説明に基づく。
+### Sources checked
+- README "Origin of the name": an independent review confirmed that the official website of Shirayama Hime Shrine (the "Deities enshrined" section of https://www.shirayama.or.jp/about/) contains an explanation of the two deities' mediation and a religious explanation linking "kukuri" and "kukuru" (to bind). The README does not quote the shrine's text verbatim. The depiction from one version of the Nihon Shoki follows an explanation specified by the owner.
 
-### 確認していないこと
-- このキットの元になった私的なツール群の設計が、第三者のリポジトリの構造に着想を得ている点。コードの流用は無い想定だが、独立レビューでの確認が要る。
-- 挿絵の生成サービスの規約と、商用・再配布の可否。
+### Not checked
+- That the design of the private toolset this kit originated from was inspired by the structure of a third-party repository. No code reuse is assumed, but confirmation by an independent review is required.
+- The terms of the illustration generation service, and whether commercial use and redistribution are allowed.
 
-## 4. 公開前のチェックリスト
+## 4. Pre-publication checklist
 
-- [ ] Git全履歴（全コミット・全ブランチ・タグ）の機密スキャン
-- [ ] 独立レビューの指摘の反映
-- [ ] ライセンスの確定（所有者）
-- [ ] 挿絵の権利確認
-- [ ] 第三者環境でのインストールと試験（macOS・Linux）
-- [ ] 公開するリポジトリの所有者・名称・可視性の決定
+- [ ] Secret scan of the full Git history (all commits, all branches, tags)
+- [ ] Reflect the independent review's findings
+- [ ] Finalize the license (owner)
+- [ ] Confirm rights to the illustrations
+- [ ] Install and test in a third-party environment (macOS, Linux)
+- [ ] Decide the owner, name and visibility of the repository to be published

@@ -1,22 +1,26 @@
-# ロードマップ
+English | [日本語](ja/roadmap.md)
 
-優先度は、安全に公開できることを先にする。
+# Roadmap
 
-## 公開前（必須）
-- [ ] 所有者によるライセンスの確定（現在はMIT候補）
-- [ ] 挿絵（GPT生成と申告）の配布条件の決定とサービス規約の確認
-- [ ] 独立レビューの指摘の反映と再レビュー
-- [ ] Git全履歴のセキュリティ確認（README・docsの外部リンクの出典確認を含む）
-- [ ] 第三者の環境でのインストール確認（macOS・Linux）
+Priority goes first to being able to publish safely.
 
-## v0.2 候補
-- [ ] 実際のClaude Code・Codexでの起動の自動試験（非対話の `--check` 以外）
-- [ ] `kukuri-memory` の分類規則を設定ファイルで宣言する（`registry/knowledge-categories.json` の仕様化）
-- [ ] 英語のREADMEとdocs
-- [ ] Journal記録の編集規則（訂正を追記で表す）
+## Before publication (required)
+- [ ] Owner finalizes the license (currently an MIT candidate)
+- [ ] Decide distribution terms for the illustrations (declared as GPT-generated) and check the service terms
+- [ ] Reflect the independent review's findings and re-review
+- [ ] Security check of the full Git history (including verifying the sources of external links in the README and docs)
+- [ ] Confirm installation in a third party's environment (macOS, Linux)
 
-## 構想（未実装・未確定）
-- AI間の連絡の仕組み（Herdr等の既存機能を使う前提）
-- 外部エージェント・Subagentとの連携
-- 各製品の会話履歴の検索（非公開形式のため、安定した仕様が前提）
-- Windows 対応
+## v0.2 candidates
+- [ ] Automated tests of launching the real Claude Code and Codex (beyond the non-interactive `--check`)
+- [ ] Declare the classification rules of `kukuri-memory` in a configuration file (specify `registry/knowledge-categories.json`)
+- [ ] English versions of docs, conventions and Skills (README is primarily English, Japanese is in README.ja.md)
+- [ ] Localisation of the CLI messages and generated page headings, which are currently Japanese
+- [ ] Decide on publication to npm (the public name `kukuri-kit` is unused on the registry; remove `"private": true` when publishing)
+- [ ] Editing rules for Journal records (express corrections by appending)
+
+## Ideas (not implemented, not decided)
+- A mechanism for communication between AIs (assuming existing features such as Herdr are used)
+- Integration with external agents and Subagents
+- Search of each product's conversation history (a stable specification is a prerequisite, since the formats are non-public)
+- Windows support

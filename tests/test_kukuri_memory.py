@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 import tempfile
 import unittest
+
+import compat
 import shutil
 
 SCRIPT = Path(__file__).resolve().parents[1] / "bin/kukuri-memory"
@@ -32,6 +34,7 @@ class MemoryTests(unittest.TestCase):
         self.assertEqual(len(rows), 1)
         self.assertEqual((rows[0]['text'], rows[0]['owner'], rows[0]['due'], rows[0]['recorded_status']), ('見積確認','吉井','10月中旬','先方待ち'))
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_import_preserves_source_and_reports_exclusions_and_searches_japanese(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); old = root/'old'; ai = root/'ai'
@@ -94,6 +97,7 @@ class MemoryTests(unittest.TestCase):
             self.assertEqual(failed['errors'][0]['source'], 'vault')
             self.assertEqual(failed['errors'][0]['error'], 'missing_root')
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_missing_root_on_first_import_does_not_publish_index(self):
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp); ai = root/'ai'; ai.mkdir()

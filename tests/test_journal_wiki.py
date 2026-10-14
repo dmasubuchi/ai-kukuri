@@ -8,6 +8,8 @@ import sys
 import tempfile
 import unittest
 
+import compat
+
 ROOT = Path(__file__).resolve().parents[1]
 TOOLS = ('kukuri-journal', 'kukuri-wiki', 'kukuri-tasks')
 
@@ -208,6 +210,7 @@ class SecurityTests(Base):
                       '--wiki', 'wiki:acme#k = 提案', ok=False)
         self.assertEqual(self.run_tool('kukuri-wiki', 'plan')['actions'], [])
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_symlinked_journal_file_outside_the_workspace_is_refused(self):
         outside = self.outside()
         folder = self.ai / 'knowledge/journal'; folder.mkdir(parents=True)
@@ -216,6 +219,7 @@ class SecurityTests(Base):
                       '--author', 'a', '--date', '2026-10-15', '--time', '10:00', ok=False)
         self.assertEqual(outside.read_text(), 'ORIGINAL\n')
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_symlinked_journal_directory_outside_the_workspace_is_refused(self):
         outside_dir = Path(self.temp.name).resolve() / 'outside-dir'; outside_dir.mkdir()
         (self.ai / 'knowledge/journal').symlink_to(outside_dir)
@@ -223,6 +227,7 @@ class SecurityTests(Base):
                       '--author', 'a', '--date', '2026-10-15', '--time', '10:00', ok=False)
         self.assertEqual(list(outside_dir.iterdir()), [])
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_symlinked_wiki_page_is_not_written_through(self):
         outside = self.outside('outside-page.md', '# 外部\n\n<!-- kukuri-wiki:v1 -->\n\n## 現在わかっていること\n\n## 未確認・矛盾\n\n## 履歴\n')
         original = outside.read_text()
@@ -235,6 +240,7 @@ class SecurityTests(Base):
         self.assertIn('"written": []', p.stdout)
         self.assertTrue((self.ai / 'knowledge/pages/acme-portal.md').is_symlink(), 'link must be left as it was')
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_symlinked_records_directory_is_refused_for_evidence(self):
         entry = self.add('result', '結果', '2026-10-02', '16:00')
         outside_dir = Path(self.temp.name).resolve() / 'outside-records'; outside_dir.mkdir()
@@ -245,6 +251,7 @@ class SecurityTests(Base):
         self.run_tool('kukuri-journal', 'evidence', entry, ok=False)
         self.assertEqual(list(outside_dir.iterdir()), [])
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_symlinked_task_log_is_refused(self):
         outside = self.outside()
         (self.ai / 'tasks/events.jsonl').symlink_to(outside)
@@ -474,6 +481,7 @@ class ReviewRegressionTests(Base):
         self.run_tool('kukuri-wiki', 'migrate', 'acme-portal', '--through', '2026-03-02', '--write')
         self.assertNotIn('FORGED', self.snapshot())
 
+    @unittest.skipIf(compat.IS_WINDOWS, 'POSIX only')
     def test_migrate_rebuilds_inside_the_lock_and_keeps_a_concurrent_append(self):
         import fcntl
         self.add('decision', 'A', '2026-03-01', '10:00', wiki=['wiki:acme-portal#x = A'])
@@ -501,6 +509,7 @@ class ReviewRegressionTests(Base):
         self.assertEqual({a['action'] for a in plan['actions']}, {'manual_review'})
         self.assertEqual(path.read_text(), before)
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_symlinked_journal_or_page_that_resolves_outside_is_never_read(self):
         outside = Path(self.temp.name).resolve() / 'outside-journal.md'
         outside.write_text('# 外部\n\n### j-20260301-1000-01 | decision | 10:00\n- 記録者: x\n- 出典: s\n- 種類: 本人の決定\n'

@@ -3,7 +3,6 @@
 import argparse
 from collections import Counter
 import datetime as dt
-import fcntl
 import hashlib
 import json
 import os
@@ -14,6 +13,24 @@ import stat
 import sys
 from urllib.parse import unquote
 import uuid
+
+try:
+    import fcntl
+
+    def lock_exclusive(handle):
+        fcntl.flock(handle, fcntl.LOCK_EX)
+except ImportError:                      # Windows: no fcntl; use a byte lock instead
+    import msvcrt
+    import time
+
+    def lock_exclusive(handle):
+        handle.seek(0)
+        while True:
+            try:
+                msvcrt.locking(handle.fileno(), msvcrt.LK_LOCK, 1)
+                return
+            except OSError:
+                time.sleep(0.05)
 
 AI=Path(__file__).resolve().parents[1]
 GOOD={'current','mapped','archived'}
@@ -221,7 +238,7 @@ class Resolver:
         guard(self.state, self.ai)
         self.state.mkdir(parents=True,exist_ok=True,mode=0o700)
         with open_append(self.state/'lock',self.ai) as lock:
-            fcntl.flock(lock,fcntl.LOCK_EX)
+            lock_exclusive(lock)
             state=load(self.state/'state.json',{})
             unique={}
             for result in sorted(results,key=lambda r:r.get('critical',False)): unique[result['key']]=result

@@ -1,11 +1,11 @@
-# ワークスペースの入口（Codex など）
+# Workspace Entry Point (Codex etc.)
 
-作業の開始時に、このファイルと同じディレクトリの次の3ファイルを読んでください。
+At the start of work, read the following three files in the same directory as this file.
 
-- `rules/common.md` — 保存先・案件特定・Journal/Wiki/TODO の共通規約
-- `registry/projects.json` — 案件の台帳
-- `runtime/machine.json` — このマシンの実パス
+- `rules/common.md` — common conventions for storage locations, project identification, and Journal/Wiki/TODO
+- `registry/projects.json` — the project registry
+- `runtime/machine.json` — the real paths on this machine
 
-案件名から対象Repoを特定し、ユーザーへ毎回 `cd` を依頼しないでください。特定できない場合だけ候補を示してください。製品固有の設定・認証・履歴は `runtime/` の専用領域に置き、共通規約へ混ぜないでください。
+Identify the target Repo from the project name, and do not ask the user to `cd` each time. Present candidates only when it cannot be identified. Keep product-specific settings, credentials, and history in a dedicated area under `runtime/`, and do not mix them into the common conventions.
 
-共通の手順（Skills）は `skills/<名前>/SKILL.md` にあります。作業に関係するものを読んでから進めてください。Codex は `.agents/skills/` からも参照できます。
+Common procedures (Skills) are in `skills/<name>/SKILL.md`. Read the ones relevant to the work before proceeding. Codex can also reference them from `.agents/skills/`.

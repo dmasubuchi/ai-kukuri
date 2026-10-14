@@ -6,7 +6,6 @@ Journal = 何が起きたか / Living Wiki = 現在分かっていること / TO
 """
 import argparse
 import datetime as dt
-import fcntl
 import json
 import os
 import re
@@ -21,6 +20,7 @@ journal = runpy.run_path(str(Path(__file__).resolve().parent / 'kukuri-journal')
 KINDS = journal['KINDS']
 guard_write = journal['guard_write']
 open_append = journal['open_append']
+lock_exclusive = journal['lock_exclusive']
 WIKI_REF = journal['WIKI_REF']
 MARKER = '<!-- kukuri-wiki:v1 -->'
 SEC_NOW, SEC_OPEN, SEC_HIST, SEC_APPLIED, SEC_NOTES = '現在わかっていること', '未確認・矛盾', '履歴', '反映済みの記録', '移行の記録'
@@ -408,7 +408,7 @@ def migrate(args):
                 'confirmed_through': args.through, 'written': False}
     guard_write(AI, pages_dir(AI) / '.wiki.lock')
     with open_append(AI, pages_dir(AI) / '.wiki.lock') as lock:
-        fcntl.flock(lock, fcntl.LOCK_EX)
+        lock_exclusive(lock)
         old, new = build()                       # 読み取り・再構成・書き込みを、同じロックの中で行う
         note = '%s 台帳を移行: Journalの全記録から再構成（人の確認済みの日付: %s）' % (
             dt.date.today().isoformat(), args.through or '指定なし')
@@ -437,7 +437,7 @@ def main():
                 guard_write(AI, pages_dir(AI) / '.wiki.lock')
                 pages_dir(AI).mkdir(parents=True, exist_ok=True)
                 with open_append(AI, pages_dir(AI) / '.wiki.lock') as lock:
-                    fcntl.flock(lock, fcntl.LOCK_EX)
+                    lock_exclusive(lock)
                     result = run_plan(args, write=True)
             else:
                 result = run_plan(args, write=False)

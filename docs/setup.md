@@ -1,75 +1,82 @@
-# セットアップ
+English | [日本語](ja/setup.md)
 
-## 前提
+# Setup
 
-- macOS または Linux
-- Python 3（標準ライブラリのみ使用）と POSIX シェル
+## Prerequisites
+
+- macOS or Linux
+- Python 3 (standard library only) and a POSIX shell
 - Git
-- 任意: Claude Code、Codex、Herdr（このキットが提供するのは、保存先の規約と起動の隔離だけ）
+- Optional: Claude Code, Codex, Herdr (this kit provides only the storage conventions and launch isolation)
 
-## 1. キットを取得する
+## Installation methods (all produce the same workspace)
 
 ```sh
-git clone <このリポジトリ> kukuri-kit
-cd kukuri-kit
+# A. npm (after publication to npm). Before publication you can run it directly from GitHub
+npx kukuri-kit init ~/kukuri-workspace
+npx github:<owner>/kukuri-kit init ~/kukuri-workspace
+
+# B. From a cloned repository
+git clone <this repository> kukuri-kit && cd kukuri-kit
+./install.sh ~/kukuri-workspace
+
+# C. One line (specify the archive URL. If you add KUKURI_KIT_SHA256, it aborts when the hash does not match)
+curl -fsSL <URL of install.sh> | KUKURI_KIT_TARBALL=<archive URL> sh -s -- ~/kukuri-workspace
 ```
 
-## 2. 動作を確かめる（任意）
+- It does not create a workspace in a non-empty location. To add only the missing files, use `npx kukuri-kit repair <dir>` (or `scripts/init-workspace.sh --repair <dir>`). Existing files are not overwritten.
+- Check the environment: `npx kukuri-kit doctor` (python3 3.9 or later, sh, git). Check operation: `npx kukuri-kit demo` (fictional data).
+- Commands are **copied** into `bin/` (each command determines the workspace from its own location. Do not turn them into symlinks).
+- `package.json` has `"private": true` for safety before publication (so `npm publish` cannot happen by mistake). The owner decides on publication.
+
+## Verifying operation (optional)
 
 ```sh
 sh examples/demo.sh
-(cd tests && python3 -B -m unittest discover -p 'test_*.py')   # サブシェル。作業ディレクトリは変わらない
+(cd tests && python3 -B -m unittest discover -p 'test_*.py')   # subshell; the working directory does not change
 ```
 
-## 3. ワークスペースを作る
+## Where common Skills are registered
 
-```sh
-scripts/init-workspace.sh ~/kukuri-workspace
-```
+`init-workspace.sh` registers `skills/<name>/` by relative symlink in the locations each product searches.
 
-空でないディレクトリには作成しません。コマンドは `~/kukuri-workspace/bin/` に **コピー** されます（各コマンドは、自分の場所からワークスペースを決めます。シンボリックリンクにしないでください）。
-
-## 共通Skillsの登録先
-
-`init-workspace.sh` は、`skills/<名前>/` を、製品が探す場所へ相対シンボリックリンクで登録します。
-
-| 製品 | 登録先 | 状態 |
+| Product | Registered at | Status |
 |---|---|---|
-| Claude Code（`kukuri-claude` 経由。`CLAUDE_CONFIG_DIR=runtime/claude`） | `runtime/claude/skills/<名前>` | 私的な運用では動作を確認済み。このキットの自動試験は、リンクの存在までを検査 |
-| Codex | `.agents/skills/<名前>` | 公式資料に基づく配置。実機での読み込みは、このキットでは未検証 |
+| Claude Code (via `kukuri-claude`; `CLAUDE_CONFIG_DIR=runtime/claude`) | `runtime/claude/skills/<name>` | Operation confirmed in private use. This kit's automated tests check only that the links exist |
+| Codex | `.agents/skills/<name>` | Placement based on official documentation. Loading on a real machine is not verified by this kit |
 
-入口文書（`AGENTS.md` `CLAUDE.md`）にも、Skills の場所を書いています。
+The entry-point documents (`AGENTS.md` `CLAUDE.md`) also state where the Skills are.
 
-## 知識・TODOを版管理するとき
+## Putting knowledge and TODOs under version control
 
-生成される `.gitignore` は、`knowledge/` と `tasks/` を除外します（業務記録・顧客情報を、誤って規約のリポジトリに入れないため）。版管理したいときは、別のPrivateリポジトリを使ってください。
+The generated `.gitignore` excludes `knowledge/` and `tasks/` (to avoid accidentally putting business records or customer information into the conventions repository). If you want version control, use a separate private repository.
 
-## 4. 案件を登録する
+## 4. Register a project
 
-`registry/projects.json` に案件を追加します。`directory` は `projects/` からの相対パスです。実パスは `runtime/machine.json` で決まります。
+Add the project to `registry/projects.json`. `directory` is a path relative to `projects/`. The actual path is determined by `runtime/machine.json`.
 
-## 5. AI製品を起動する（任意）
+## 5. Launch an AI product (optional)
 
 ```sh
 cd ~/kukuri-workspace
-# 製品の本体のパスを runtime/launchers.json に書く（省略するとPATHから探す）
+# Write the path of each product's executable to runtime/launchers.json (if omitted, it is searched on PATH)
 echo '{"claude": "/absolute/path/to/claude", "codex": "/absolute/path/to/codex"}' > runtime/launchers.json
-bin/kukuri-claude --check     # 起動せず、設定の分離を確認
+bin/kukuri-claude --check     # does not launch; checks that settings are isolated
 bin/kukuri-codex  --check
 ```
 
-`bin/` を `PATH` に追加する必要はありません。製品ごとの設定・認証・履歴は `runtime/claude/` `runtime/codex/` に分離されます。
+You do not need to add `bin/` to `PATH`. Each product's settings, credentials and history are isolated under `runtime/claude/` and `runtime/codex/`.
 
-## 6. 記録を取り込む（任意）
+## 6. Import records (optional)
 
-`registry/knowledge-sources.json` に取り込み元のディレクトリを書き、`bin/kukuri-memory import` を実行します。
+Write the directories to import from in `registry/knowledge-sources.json`, then run `bin/kukuri-memory import`.
 
 ```json
 {"sources": [{"id": "notes", "root": "/absolute/path/to/notes"}]}
 ```
 
-取り込み元が存在しないときは、現在の索引を置き換えずに停止します。原本は変更しません。
+If an import source does not exist, it stops without replacing the current index. The originals are not modified.
 
-## アンインストール
+## Uninstall
 
-ワークスペースのディレクトリを削除するだけです。キット自体はシステムに何も書きません。
+Just delete the workspace directory. The kit itself writes nothing to the system.

@@ -1,11 +1,11 @@
-# ワークスペースの入口（Claude Code）
+# Workspace Entry Point (Claude Code)
 
-作業の開始時に、このディレクトリの次の3ファイルを読んでください。
+At the start of work, read the following three files in this directory.
 
-- `rules/common.md` — 保存先・案件特定・Journal/Wiki/TODO の共通規約
-- `registry/projects.json` — 案件の台帳
-- `runtime/machine.json` — このマシンの実パス
+- `rules/common.md` — common conventions for storage locations, project identification, and Journal/Wiki/TODO
+- `registry/projects.json` — the project registry
+- `runtime/machine.json` — the real paths on this machine
 
-案件名は台帳と照合し、毎回 `cd` を依頼しないでください。読み込めない場合は報告し、推測で別の設定へ切り替えないでください。Claude Code の機能は活用して構いません。設定・認証・履歴は専用の `CLAUDE_CONFIG_DIR`（`runtime/claude`）を使います。
+Match the project name against the registry, and do not ask the user to `cd` each time. If they cannot be loaded, report it and do not switch to other settings by guessing. You may use Claude Code's features. Settings, credentials, and history use the dedicated `CLAUDE_CONFIG_DIR` (`runtime/claude`).
 
-共通の手順（Skills）は `skills/<名前>/SKILL.md` にあります。作業に関係するものを読んでから進めてください。専用の設定ディレクトリでは `runtime/claude/skills/` から参照されます。
+Common procedures (Skills) are in `skills/<name>/SKILL.md`. Read the ones relevant to the work before proceeding. With the dedicated config directory, they are referenced from `runtime/claude/skills/`.

@@ -3,8 +3,11 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
+
+import compat
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -16,7 +19,16 @@ class WorkspaceTests(unittest.TestCase):
         self.base = Path(self.temp.name).resolve()
 
     def sh(self, *args, ok=True):
-        p = subprocess.run(['sh', *map(str, args)], capture_output=True, text=True, cwd=str(self.base))
+        """Run the portable Python scripts (the .sh files are thin wrappers around them)."""
+        args = [str(a) for a in args]
+        script = Path(args[0])
+        if script.name == 'init-workspace.sh':
+            cmd = [sys.executable, '-B', str(ROOT / 'scripts/init_workspace.py'), *args[1:]]
+        elif script.name == 'demo.sh':
+            cmd = [sys.executable, '-B', str(ROOT / 'examples/demo.py'), *args[1:]]
+        else:
+            cmd = ['sh', *args]
+        p = subprocess.run(cmd, capture_output=True, text=True, cwd=str(self.base), encoding='utf-8')
         if ok:
             self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
         else:
@@ -67,6 +79,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertIn(data['status'], ('current', 'mapped'))
         self.assertEqual(Path(data['path']).resolve(), (ws / 'projects/sample-portal/proof.md').resolve())
 
+    @unittest.skipIf(compat.IS_WINDOWS, 'POSIX only')
     def test_claude_wrapper_gets_a_valid_mcp_config(self):
         ws = self.base / 'ws'
         self.sh(ROOT / 'scripts/init-workspace.sh', ws)
@@ -94,6 +107,7 @@ class WorkspaceTests(unittest.TestCase):
         self.assertTrue((ws / 'registry/paths.json').is_file())
         self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', self.base / 'does-not-exist', ok=False)
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_repair_refuses_symlinks_that_lead_outside_and_creates_nothing_first(self):
         outside = self.base / 'outside'
         outside.mkdir()
@@ -105,6 +119,7 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(list(outside.iterdir()), [], name)
             self.assertEqual([p.name for p in ws.iterdir()], [name], 'nothing may be created before the guard')
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_repair_refuses_a_symlinked_file_and_a_symlinked_cli(self):
         ws = self.base / 'ws'
         self.sh(ROOT / 'scripts/init-workspace.sh', ws)
@@ -120,6 +135,7 @@ class WorkspaceTests(unittest.TestCase):
         self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', ws, ok=False)
         self.assertEqual(target.read_text(), 'KEEP')
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_data_directories_may_be_symlinks_and_are_not_written(self):
         ws = self.base / 'ws'
         disk = self.base / 'other-disk'
@@ -129,6 +145,7 @@ class WorkspaceTests(unittest.TestCase):
         self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', ws)
         self.assertEqual(list(disk.iterdir()), [])
 
+    @unittest.skipIf(compat.IS_WINDOWS, 'POSIX only')
     def test_repair_keeps_the_mode_and_bytes_of_existing_files(self):
         ws = self.base / 'ws'
         self.sh(ROOT / 'scripts/init-workspace.sh', ws)
@@ -165,6 +182,7 @@ class WorkspaceTests(unittest.TestCase):
                 self.assertEqual(run('git', 'check-ignore', '-q', rel).returncode, 0, rel)
         self.assertIn('AGENTS.md', paths)
 
+    @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_shared_skills_are_registered_where_products_look_for_them(self):
         ws = self.base / 'ws'
         self.sh(ROOT / 'scripts/init-workspace.sh', ws)
@@ -191,6 +209,15 @@ class WorkspaceTests(unittest.TestCase):
         self.assertEqual(p.returncode, 0, p.stderr)
         kinds = {r['category'] for r in json.loads(p.stdout)}
         self.assertEqual(kinds, {'curated-knowledge', 'journal'})
+
+    @unittest.skipIf(compat.IS_WINDOWS, 'POSIX only')
+    def test_posix_wrappers_delegate_to_the_python_scripts(self):
+        ws = self.base / 'ws'
+        p = subprocess.run(['sh', str(ROOT / 'scripts/init-workspace.sh'), str(ws)], capture_output=True, text=True)
+        self.assertEqual(p.returncode, 0, p.stderr)
+        self.assertIn('workspace ready', p.stdout)
+        d = subprocess.run(['sh', str(ROOT / 'examples/demo.sh'), str(self.base / 'demo')], capture_output=True, text=True)
+        self.assertEqual(d.returncode, 0, d.stderr)
 
 
 if __name__ == '__main__':
