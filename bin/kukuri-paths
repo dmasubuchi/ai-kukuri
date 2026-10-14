@@ -139,7 +139,10 @@ class Resolver:
             real=path.resolve(strict=True)
             allowed=[self.ai]+[p for roots in self.roots.values() for p in roots]
             platform_path=Path('/private'+str(path)) if sys.platform=='darwin' and str(path).startswith(('/var/','/tmp/','/etc/')) else path
-            if real!=platform_path and not any(inside(real,p.resolve()) for p in allowed):
+            # A path that merely resolves differently (e.g. Windows 8.3 short names, /var -> /private/var) is fine;
+            # only a symlink somewhere in the chain can lead outside the known roots.
+            via_link=any(q.is_symlink() for q in (path,*path.parents))
+            if via_link and real!=platform_path and not any(inside(real,p.resolve()) for p in allowed):
                 return {'path':str(path),'status':'symlink_unverified','realpath':str(real)}
             s=path.stat()
             if not (stat.S_ISREG(s.st_mode) or stat.S_ISDIR(s.st_mode)):

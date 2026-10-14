@@ -133,11 +133,11 @@ def enumerate_source(source):
         for name in list(dirs):
             path = Path(directory) / name
             if name in SKIP_DIRS or path.is_symlink():
-                yield path, str(path.relative_to(root)), 'excluded_dependency' if name in SKIP_DIRS else 'symlink_reference'
+                yield path, path.relative_to(root).as_posix(), 'excluded_dependency' if name in SKIP_DIRS else 'symlink_reference'
                 dirs.remove(name)
         for name in sorted(files):
             path = Path(directory) / name
-            yield path, str(path.relative_to(root)), 'symlink_reference' if path.is_symlink() else None
+            yield path, path.relative_to(root).as_posix(), 'symlink_reference' if path.is_symlink() else None
 
 
 def import_sources(ai, config):
