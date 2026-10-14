@@ -23,4 +23,4 @@ Priority goes first to being able to publish safely.
 - A mechanism for communication between AIs (assuming existing features such as Herdr are used)
 - Integration with external agents and Subagents
 - Search of each product's conversation history (a stable specification is a prerequisite, since the formats are non-public)
-- Windows support
+- Windows: PowerShell/cmd wrappers for the launcher; a check against the real Claude Code and Codex on Windows

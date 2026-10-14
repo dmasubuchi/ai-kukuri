@@ -50,7 +50,7 @@ An open-source project inspired by Japanese mythology, for "binding" AI, knowled
 
 ## Install
 
-Requires Python 3.9+ and a POSIX shell (macOS / Linux). Node.js is only needed for `npx`. Windows is not supported yet.
+Requires Python 3.9+. Node.js is only needed for `npx`. Runs on macOS, Linux and Windows (see [Platform notes](#platform-notes)).
 
 ```sh
 # 1. npm (once published to npm). Until then, run it straight from GitHub:
@@ -61,11 +61,23 @@ npx github:<owner>/kukuri-kit init ~/kukuri-workspace
 git clone <this repository> kukuri-kit && cd kukuri-kit
 ./install.sh ~/kukuri-workspace
 
-# 3. One line (give the URL of the archive)
+# 3. Windows (PowerShell), from a checkout
+.\install.ps1 $HOME\kukuri-workspace
+
+# 4. One line, macOS / Linux (give the URL of the archive)
 curl -fsSL <URL of install.sh> | KUKURI_KIT_TARBALL=<URL of the archive> sh -s -- ~/kukuri-workspace
 ```
 
 Check your environment with `npx kukuri-kit doctor`, or just watch it work with `npx kukuri-kit demo` (fictional data only).
+
+## Platform notes
+
+| Platform | Status |
+|---|---|
+| macOS, Linux | The Python CLIs, the installer, the demo and the launcher wrappers are tested in CI (Python 3.9 and 3.12). |
+| Windows | The Python CLIs, `init_workspace.py`, `install.ps1`, `npx kukuri-kit` and the demo are tested in CI on `windows-latest` (Python 3.9 and 3.12). The shell wrappers (`install.sh`, `kukuri-claude`, `kukuri-codex`) are POSIX only; on Windows run `python bin/kukuri-launch.py claude` instead. Tests that need symlinks or POSIX permissions are skipped there. The launcher has not been run against the real Claude Code or Codex on Windows. |
+
+The AI itself does not care where it runs; the platform notes above are only about this kit's own scripts (file locks, symlink guards, installer).
 
 ## First steps
 

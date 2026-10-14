@@ -22,4 +22,4 @@
 - AI間の連絡の仕組み（Herdr等の既存機能を使う前提）
 - 外部エージェント・Subagentとの連携
 - 各製品の会話履歴の検索（非公開形式のため、安定した仕様が前提）
-- Windows 対応
+- Windows: 起動ラッパーのPowerShell/cmd版と、実際の Claude Code・Codex での確認

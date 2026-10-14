@@ -27,3 +27,12 @@ jobs:
         run: python -B examples/demo.py
       - name: npm launcher
         run: node bin/kukuri-kit.js doctor
+      - name: PowerShell installer (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          ./install.ps1 "$env:RUNNER_TEMP\ws-ps"
+          if (-not (Test-Path "$env:RUNNER_TEMP\ws-ps\bin\kukuri-journal")) { throw 'workspace was not created' }
+          python -B "$env:RUNNER_TEMP\ws-ps\bin\kukuri-journal" add --kind result --text "installed" --source "ci" --author ci
+          ./install.ps1 -Repair "$env:RUNNER_TEMP\ws-ps"
+

@@ -50,7 +50,7 @@ KUKURIは、すべてのAIを支配する存在ではなく、異なるAIの間�
 
 ## クイックスタート
 
-必要なもの: Python 3.9 以上（Python 3.12 で検証。CIでの対象は .github/workflows/test.yml）、POSIX シェル（macOS / Linux）。Node.js は、`npx` を使うときだけ必要です。
+必要なもの: Python 3.9 以上。Node.js は、`npx` を使うときだけ必要です。macOS・Linux・Windows で動作します（下の「プラットフォームの注記」）。
 
 ### いちばん簡単な方法
 
@@ -63,11 +63,23 @@ npx github:<owner>/kukuri-kit init ~/kukuri-workspace
 git clone <このリポジトリ> kukuri-kit && cd kukuri-kit
 ./install.sh ~/kukuri-workspace
 
-# 3. 1行（アーカイブのURLを指定）
+# 3. Windows（PowerShell。取得したリポジトリから）
+.\install.ps1 $HOME\kukuri-workspace
+
+# 4. 1行・macOS / Linux（アーカイブのURLを指定）
 curl -fsSL <install.shのURL> | KUKURI_KIT_TARBALL=<アーカイブのURL> sh -s -- ~/kukuri-workspace
 ```
 
 動作を確かめるだけなら: `npx kukuri-kit demo`（または `sh examples/demo.sh`）。環境の確認は `npx kukuri-kit doctor`。
+
+### プラットフォームの注記
+
+| 環境 | 状態 |
+|---|---|
+| macOS・Linux | Python の各コマンド、導入スクリプト、デモ、起動ラッパーを、CI（Python 3.9・3.12）で試験 |
+| Windows | Python の各コマンド、`init_workspace.py`、`install.ps1`、`npx kukuri-kit`、デモを、CI（`windows-latest`、Python 3.9・3.12）で試験。シェルのラッパー（`install.sh`・`kukuri-claude`・`kukuri-codex`）は POSIX 専用で、Windows では `python bin/kukuri-launch.py claude` を使う。シンボリックリンクや POSIX の権限を要する試験は、Windows ではスキップ。実際の Claude Code・Codex での起動は、Windows では未検証 |
+
+AI 自体は、どこで動いても同じです。この注記は、このキット自身のスクリプト（ファイルロック、シンボリックリンクの保護、導入スクリプト）についてのものです。
 
 ### 使い始める
 

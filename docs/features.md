@@ -20,4 +20,4 @@ English | [日本語](ja/features.md)
 | Search of old conversation logs (each product's native history) | **Not implemented** (under consideration; excluded from v0.1 because it depends on non-public formats) | — |
 | Integration with external services such as MCP, email, Teams | **Not included** | — |
 | Radio / audio generation | **Not included** (the terms of use of audio models must be checked) | — |
-| Windows support | **Not supported** | — |
+| Windows (native) | **Python CLIs, installer, npm launcher and demo: tested in CI on `windows-latest`.** POSIX-only: the shell wrappers; the launcher is untested against the real products on Windows | CI (Python 3.9 / 3.12) |

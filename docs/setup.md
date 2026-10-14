@@ -20,7 +20,10 @@ npx github:<owner>/kukuri-kit init ~/kukuri-workspace
 git clone <this repository> kukuri-kit && cd kukuri-kit
 ./install.sh ~/kukuri-workspace
 
-# C. One line (specify the archive URL. If you add KUKURI_KIT_SHA256, it aborts when the hash does not match)
+# C. Windows (PowerShell), from a checkout
+.\install.ps1 $HOME\kukuri-workspace
+
+# D. One line (macOS / Linux) (specify the archive URL. If you add KUKURI_KIT_SHA256, it aborts when the hash does not match)
 curl -fsSL <URL of install.sh> | KUKURI_KIT_TARBALL=<archive URL> sh -s -- ~/kukuri-workspace
 ```
 
