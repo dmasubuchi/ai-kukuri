@@ -334,16 +334,16 @@ class ReviewRegressionTests(Base):
         again = self.run_tool('kukuri-wiki', 'apply', '--write')
         self.assertEqual({a['action'] for a in again['actions']}, {'skip'})
 
-    def test_an_older_record_appended_after_a_later_apply_is_noted_not_adopted(self):
+    def test_an_older_record_appended_after_a_later_apply_never_overrides_it(self):
         self.add('result', '午後の状態', '2026-03-01', '15:00', wiki=['wiki:acme-portal#status = 午後の状態'])
         self.run_tool('kukuri-wiki', 'apply', '--write')
         self.add('result', '朝の状態', '2026-03-01', '08:00', wiki=['wiki:acme-portal#status = 朝の状態'])
-        plan = self.run_tool('kukuri-wiki', 'apply', '--write')
-        self.assertIn('note_older', [a['action'] for a in plan['actions']])
+        self.run_tool('kukuri-wiki', 'apply', '--write')
         text = self.snapshot()
         self.assertIn('午後の状態', text.split('## 未確認・矛盾')[0])
-        self.assertIn('古い記録（置換せず）', text.split('## 履歴')[1])
-
+        self.assertNotIn('朝の状態', text.split('## 未確認・矛盾')[0])
+        self.assertIn('朝の状態', text.split('## 履歴')[1])
+        self.assertEqual(self.run_tool('kukuri-wiki', 'apply', '--write')['written'], [])
     def old_format_page(self):
         """a46831a までの版が書いた形式（反映済みの記録の節が無い）。解消済みの候補の記録IDは履歴に残らない。"""
         (self.ai / 'knowledge/pages/acme-portal.md').write_text(
@@ -414,36 +414,42 @@ class ReviewRegressionTests(Base):
         self.assertEqual(self.run_tool('kukuri-wiki', 'check')['stats']['conflict'], 2)
         self.assertNotIn('[v]', self.snapshot().split('## 未確認・矛盾')[0])
 
-    def test_result_does_not_depend_on_the_order_entries_were_appended(self):
-        import itertools
-        specs = [('result', 'A', '09:00'), ('result', 'B', '12:00'), ('result', 'A', '15:00'), ('decision', 'D', '08:00')]
-        finals = set()
-        for order in itertools.permutations(range(len(specs))):
-            ws = Path(self.temp.name).resolve() / ('perm-' + ''.join(map(str, order)))
-            (ws / 'bin').mkdir(parents=True)
-            for name in TOOLS:
-                shutil.copy(ROOT / 'bin' / name, ws / 'bin' / name)
-            (ws / 'knowledge/pages').mkdir(parents=True); (ws / 'tasks').mkdir()
-            (ws / 'tasks/baseline.json').write_text('{"items": []}')
-            for i in order:
-                kind, text, time = specs[i]
-                subprocess.run([sys.executable, '-B', str(ws / 'bin/kukuri-journal'), 'add', '--kind', kind, '--text', text,
-                                '--source', 's', '--author', 'a', '--date', '2026-03-01', '--time', time,
-                                '--wiki', 'wiki:acme#v = ' + text], check=True, capture_output=True)
-            subprocess.run([sys.executable, '-B', str(ws / 'bin/kukuri-wiki'), 'apply', '--write'], check=True, capture_output=True)
-            page = (ws / 'knowledge/pages/acme.md').read_text()
-            finals.add(tuple(l.split(' | ')[0] for l in page.split('## 未確認・矛盾')[0].splitlines() if l.startswith('- [v]')))
-        self.assertEqual(len(finals), 1, finals)
+    def _final(self, specs, order, incremental, tag):
+        ws = Path(self.temp.name).resolve() / ('perm-%s-%s' % (tag, ''.join(map(str, order))))
+        (ws / 'bin').mkdir(parents=True)
+        for name in TOOLS:
+            shutil.copy(ROOT / 'bin' / name, ws / 'bin' / name)
+        (ws / 'knowledge/pages').mkdir(parents=True); (ws / 'tasks').mkdir()
+        (ws / 'tasks/baseline.json').write_text('{"items": []}')
+        def run(tool, *args):
+            subprocess.run([sys.executable, '-B', str(ws / 'bin' / tool), *args], check=True, capture_output=True)
+        for i in order:
+            kind, text, time = specs[i]
+            run('kukuri-journal', 'add', '--kind', kind, '--text', text, '--source', 's', '--author', 'a',
+                '--date', '2026-03-01', '--time', time, '--wiki', 'wiki:acme#v = ' + text)
+            if incremental:
+                run('kukuri-wiki', 'apply', '--write')
+        run('kukuri-wiki', 'apply', '--write')
+        page = (ws / 'knowledge/pages/acme.md').read_text()
+        def claims(section):
+            return tuple(sorted(l.split(' | ')[0] + ' | ' + l.split(' | ')[-1] if False else l.split(' | ')[0]
+                                for l in section.splitlines() if l.startswith('- [v]')))
+        head = page.split('## 履歴')[0]
+        return (claims(head.split('## 未確認・矛盾')[0]), claims(head.split('## 未確認・矛盾')[1]))
 
-    def test_claims_written_before_the_time_field_recover_their_time_from_the_source_id(self):
-        self.add('result', '旧', '2026-03-01', '09:00', wiki=['wiki:acme-portal#v = 旧'])
-        self.run_tool('kukuri-wiki', 'apply', '--write')
-        path = self.ai / 'knowledge/pages/acme-portal.md'
-        path.write_text(path.read_text().replace(' | time: 09:00', ''))          # 旧版が書いた形式（時刻なし）
-        self.add('result', '新', '2026-03-01', '15:00', wiki=['wiki:acme-portal#v = 新'])
-        plan = self.run_tool('kukuri-wiki', 'apply', '--write')
-        self.assertEqual([a['action'] for a in plan['actions'] if a['action'] != 'skip'], ['supersede'])
-        self.assertIn('[v] 新', self.snapshot().split('## 未確認・矛盾')[0])
+    def test_result_does_not_depend_on_append_order_or_on_when_apply_runs(self):
+        import itertools
+        suites = {
+            'a': [('result', 'A', '09:00'), ('result', 'B', '12:00'), ('result', 'A', '15:00'), ('decision', 'D', '08:00')],
+            'b': [('result', 'R', '09:00'), ('decision', 'D', '08:00'), ('observation', 'O', '10:00')],
+            'c': [('observation', 'A', '09:00'), ('observation', 'A', '15:00'), ('result', 'B', '12:00')],
+        }
+        for tag, specs in suites.items():
+            finals = {}
+            for order in itertools.permutations(range(len(specs))):
+                for incremental in (False, True):
+                    finals.setdefault(self._final(specs, order, incremental, tag + str(int(incremental))), []).append((order, incremental))
+            self.assertEqual(len(finals), 1, {k: v[:2] for k, v in finals.items()})
 
 
 if __name__ == '__main__':

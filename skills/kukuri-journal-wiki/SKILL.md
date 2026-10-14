@@ -11,10 +11,12 @@ description: 日々の仕事をJournal（何が起きたか）に記録し、Liv
    種類は `decision`（本人の決定）／`request`（相手の依頼）／`proposal`（AIの提案）／`result`（実作業の結果）／`observation`（観察・未確認）。AIの提案を本人の決定として書かない。出典がない事実は書かない。追記のみ。過去の記録を書き換えない。
 2. **計画**: `bin/kukuri-wiki plan [--date YYYY-MM-DD]`。何も書かない。各項目の `action` と `reason` を読む。
 3. **反映**: 内容を確認してから `bin/kukuri-wiki apply --write`。既存の自由形式ページ（`manual_legacy_page`）は自動更新されない。人が内容を確認して移す。
-3b. 旧版のページ（反映済みの記録の欄が無い）は、`migration_required` で止まる。`bin/kukuri-wiki migrate <slug> --through <最後に反映した日付> --write` で範囲を明示する（日付は人が決める）。
+3b. 旧版のページ（反映済みの記録の欄が無い）は、`migration_required` で止まる。内容を確認して、`bin/kukuri-wiki migrate <slug> --write` でJournalから再構成する。手で編集されたページ（Journalに無い出典の主張）は `manual_review` で止まる。
 4. **検査**: `bin/kukuri-wiki check`。出典の欠落・未来日付・競合の件数を見る。
 
-## 矛盾の扱い（自動で決めてよいのは日付と種類で優劣が明確なときだけ）
+## 矛盾の扱い（自動で決めてよいのは日時と種類で優劣が明確なときだけ）
+
+Wikiは、Journalの全記録を日時順に再構成します。追記の順番や `apply` の回数で結果は変わりません。
 
 - 後日の `decision`/`result` → 旧記述を履歴へ出典・日付つきで移して置換（supersede）
 - `proposal`/`observation`/`request`、または同日・古い日付 → 両方を「未確認・矛盾」に残す（conflict）。確定扱いにしない
