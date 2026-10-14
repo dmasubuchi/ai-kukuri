@@ -152,6 +152,14 @@ def plan(ai, entries):
     return actions, pages
 
 
+def claim_time(c):
+    """時刻を持たない旧い主張は、出典の記録ID（j-YYYYMMDD-HHMM-NN）から時刻を復元する。"""
+    if c.get('time'):
+        return c['time']
+    m = re.match(r'^j-[0-9]{8}-([0-9]{2})([0-9]{2})-', c.get('source') or '', re.ASCII)
+    return '%s:%s' % m.groups() if m else ''
+
+
 def decide(page, e, key, text):
     current = [c for c in page['claims'] if c['key'] == key]
     if '%s#%s' % (e['id'], key) in page['applied']:
@@ -165,7 +173,7 @@ def decide(page, e, key, text):
     es = (e['date'], e['time'])                      # 記録の日時。日付だけでなく時刻まで比べる
     if confirmed:
         c = confirmed[0]
-        cs = (c['as_of'] or '', c.get('time') or '')
+        cs = (c['as_of'] or '', claim_time(c))
         old = {'old': c['text'], 'old_source': c['source'], 'old_as_of': c['as_of']}
         if norm(c['text']) == norm(text):
             if confirms and es > cs:
@@ -176,17 +184,17 @@ def decide(page, e, key, text):
             return {'action': 'note_older', 'reason': '確定済みの記述より古い記録のため置換しない（履歴に、出典つきで記録する）', **old}
         date_newer = e['date'] > (c['as_of'] or '')
         # 同じ日でも、同じ種類（決定どうし・結果どうし）の、より遅い時刻の記録は、更新として扱う
-        same_day_later = (e['date'] == c['as_of'] and e['kind'] == c['kind'] and bool(c.get('time'))
-                          and e['time'] > c['time'])
+        same_day_later = (e['date'] == c['as_of'] and e['kind'] == c['kind'] and bool(claim_time(c))
+                          and e['time'] > claim_time(c))
         if confirms and (date_newer or owner_over or same_day_later):
             return {'action': 'supersede', 'reason': '後日の決定・結果で置換（旧記述は履歴に出典つきで保持）', **old}
         return {'action': 'conflict', 'reason': '日付または種類で優劣を決められないため、両方を未確認として保持', **old}
-    latest = max((c['as_of'] or '', c.get('time') or '') for c in opened)
+    latest = max((c['as_of'] or '', claim_time(c)) for c in opened)
     if confirms and es >= latest:
         return {'action': 'resolve', 'reason': '決定・結果で未確認事項を解消（旧候補は履歴に保持）',
                 'old': ' / '.join(c['text'] for c in opened)}
     if confirms and es < latest:
-        newest = max(opened, key=lambda c: (c['as_of'] or '', c.get('time') or ''))
+        newest = max(opened, key=lambda c: (c['as_of'] or '', claim_time(c)))
         return {'action': 'note_older', 'reason': '未確認事項より古い決定・結果のため、解消に使わない（履歴に、出典つきで記録する）',
                 'old': ' / '.join(c['text'] for c in opened), 'old_source': newest['source'], 'old_as_of': newest['as_of']}
     for c in opened:

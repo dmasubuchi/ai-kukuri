@@ -435,6 +435,16 @@ class ReviewRegressionTests(Base):
             finals.add(tuple(l.split(' | ')[0] for l in page.split('## 未確認・矛盾')[0].splitlines() if l.startswith('- [v]')))
         self.assertEqual(len(finals), 1, finals)
 
+    def test_claims_written_before_the_time_field_recover_their_time_from_the_source_id(self):
+        self.add('result', '旧', '2026-03-01', '09:00', wiki=['wiki:acme-portal#v = 旧'])
+        self.run_tool('kukuri-wiki', 'apply', '--write')
+        path = self.ai / 'knowledge/pages/acme-portal.md'
+        path.write_text(path.read_text().replace(' | time: 09:00', ''))          # 旧版が書いた形式（時刻なし）
+        self.add('result', '新', '2026-03-01', '15:00', wiki=['wiki:acme-portal#v = 新'])
+        plan = self.run_tool('kukuri-wiki', 'apply', '--write')
+        self.assertEqual([a['action'] for a in plan['actions'] if a['action'] != 'skip'], ['supersede'])
+        self.assertIn('[v] 新', self.snapshot().split('## 未確認・矛盾')[0])
+
 
 if __name__ == '__main__':
     unittest.main()
