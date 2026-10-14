@@ -135,6 +135,19 @@ class WorkspaceTests(unittest.TestCase):
             self.assertEqual(list(outside.iterdir()), [], name)
             self.assertEqual([p.name for p in ws.iterdir()], [name], 'nothing may be created before the guard')
 
+    @unittest.skipUnless(compat.IS_WINDOWS, 'real directory junctions exist only on Windows')
+    def test_repair_refuses_a_real_windows_junction_and_writes_nothing(self):
+        outside = self.base / 'outside-j'
+        outside.mkdir()
+        ws = self.base / 'ws-j'
+        ws.mkdir()
+        made = subprocess.run(['cmd', '/c', 'mklink', '/J', str(ws / 'runtime'), str(outside)],
+                              capture_output=True, text=True)
+        self.assertEqual(made.returncode, 0, 'mklink /J failed (this must not count as a passing refusal): ' + made.stderr + made.stdout)
+        self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', ws, ok=False)
+        self.assertEqual(list(outside.iterdir()), [])
+        self.assertEqual([p.name for p in ws.iterdir()], ['runtime'])
+
     @unittest.skipUnless(compat.CAN_SYMLINK, 'symlinks are not available on this platform')
     def test_repair_refuses_a_symlinked_file_and_a_symlinked_cli(self):
         ws = self.base / 'ws'

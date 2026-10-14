@@ -141,6 +141,20 @@ class LaunchTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['binary'], str(body))
 
+    def test_marker_split_across_a_chunk_boundary_and_explicit_setting_are_refused(self):
+        other = Path(self.temp.name)/'other-split'
+        (other/'bin').mkdir(parents=True)
+        marker = b'kukuri-launch.py'
+        head = b'#!/bin/sh\n'
+        pad = b'#' * (1024 * 1024 - len(head) - 5)         # the marker straddles the 1 MiB boundary
+        wrapper = other/'bin'/'codex'
+        wrapper.write_bytes(head + pad + marker + b'\n' + b'# tail\n' * 10)
+        wrapper.chmod(0o755)
+        (self.root/'runtime/launchers.json').write_text(json.dumps({'codex': str(wrapper)}))
+        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], capture_output=True, text=True, encoding='utf-8', timeout=20)
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('recursive', result.stderr.lower())
+
 
 if __name__ == '__main__':
     unittest.main()

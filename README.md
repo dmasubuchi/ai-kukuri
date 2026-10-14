@@ -102,6 +102,7 @@ Run the tests from the repository root (a subshell, so your working directory do
 ```
 bin/        kukuri-journal  kukuri-wiki  kukuri-tasks  kukuri-memory  kukuri-paths
             kukuri-launch.py  kukuri-claude  kukuri-codex
+            (bin/kukuri-kit.js is the npm package launcher only; it is not copied into a workspace)
 rules/      common.md             the shared, product-independent rules
 skills/     kukuri-journal-wiki  kukuri-recall  kukuri-project
 templates/  AGENTS.md  CLAUDE.md  registry-projects.json  ...
