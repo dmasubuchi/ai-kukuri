@@ -47,7 +47,14 @@ for d in bin rules skills registry runtime tasks projects input output \
 done
 # copy a file only when the destination does not exist (never overwrite)
 put() { [ -e "$2" ] || [ -L "$2" ] || cp "$1" "$2"; }
-for f in "$kit"/bin/*; do put "$f" "$target/bin/$(basename "$f")"; done
+# bin/: copy only what is missing, and make only the files we created executable
+for f in "$kit"/bin/*; do
+  dest="$target/bin/$(basename "$f")"
+  if [ ! -e "$dest" ] && [ ! -L "$dest" ]; then
+    cp "$f" "$dest"
+    chmod 755 "$dest"
+  fi
+done
 put "$kit/rules/common.md" "$target/rules/common.md"
 for d in "$kit"/skills/*/; do
   name=$(basename "$d")
@@ -79,5 +86,4 @@ with open(root + "/runtime/machine.json", "w", encoding="utf-8") as f:
 PY
 fi
 [ -e "$target/tasks/baseline.json" ] || python3 -B "$target/bin/kukuri-tasks" init >/dev/null
-chmod +x "$target"/bin/* 2>/dev/null || true
 echo "workspace ready ($mode): $target"

@@ -129,6 +129,21 @@ class WorkspaceTests(unittest.TestCase):
         self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', ws)
         self.assertEqual(list(disk.iterdir()), [])
 
+    def test_repair_keeps_the_mode_and_bytes_of_existing_files(self):
+        ws = self.base / 'ws'
+        self.sh(ROOT / 'scripts/init-workspace.sh', ws)
+        custom = ws / 'bin/custom-existing-tool'
+        custom.write_text('#!/bin/sh\necho mine\n')
+        custom.chmod(0o600)
+        kept = ws / 'bin/kukuri-wiki'
+        kept.chmod(0o640)
+        before = {p: (p.stat().st_mode & 0o777, p.read_bytes()) for p in (custom, kept)}
+        (ws / 'bin/kukuri-journal').unlink()           # a missing CLI is re-created, executable
+        self.sh(ROOT / 'scripts/init-workspace.sh', '--repair', ws)
+        for p, (mode, data) in before.items():
+            self.assertEqual((p.stat().st_mode & 0o777, p.read_bytes()), (mode, data), p.name)
+        self.assertTrue(os.access(ws / 'bin/kukuri-journal', os.X_OK))
+
 
 if __name__ == '__main__':
     unittest.main()
