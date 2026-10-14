@@ -25,7 +25,7 @@ class Base(unittest.TestCase):
         self.outside.mkdir()
 
     def run_tool(self, tool, *args):
-        return subprocess.run([sys.executable, '-B', str(self.ai / 'bin' / tool), *args], capture_output=True, text=True)
+        return subprocess.run([sys.executable, '-B', str(self.ai / 'bin' / tool), *args], capture_output=True, text=True, encoding='utf-8')
 
 
 class MemoryWriteTests(Base):

@@ -27,7 +27,7 @@ class Base(unittest.TestCase):
         (self.ai / 'tasks/baseline.json').write_text('{"items": []}')
 
     def run_tool(self, tool, *args, ok=True):
-        p = subprocess.run([sys.executable, '-B', str(self.ai / 'bin' / tool), *args], capture_output=True, text=True)
+        p = subprocess.run([sys.executable, '-B', str(self.ai / 'bin' / tool), *args], capture_output=True, text=True, encoding='utf-8')
         if ok:
             self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
             return json.loads(p.stdout)
@@ -234,7 +234,7 @@ class SecurityTests(Base):
         (self.ai / 'knowledge/pages/acme-portal.md').symlink_to(outside)
         self.add('decision', '決めた', '2026-10-01', wiki=['wiki:acme-portal#hosting = クラウドA'])
         p = subprocess.run([sys.executable, '-B', str(self.ai / 'bin/kukuri-wiki'), 'apply', '--write'],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(outside.read_text(), original)
         self.assertIn('manual_review', p.stdout)
         self.assertIn('"written": []', p.stdout)
@@ -303,7 +303,7 @@ class ReviewRegressionTests(Base):
         for i in range(6):
             self.add('decision', '決定%d' % i, '2026-03-0%d' % (i + 1), wiki=['wiki:acme-portal#k%d = 値%d' % (i, i)])
         procs = [subprocess.Popen([sys.executable, '-B', str(self.ai / 'bin/kukuri-wiki'), 'apply', '--write'],
-                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(6)]
+                                  stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8') for _ in range(6)]
         results = [p.communicate() + (p.returncode,) for p in procs]
         self.assertEqual([r[2] for r in results], [0] * 6, [r[1] for r in results])
         page = self.snapshot()
@@ -490,7 +490,7 @@ class ReviewRegressionTests(Base):
         with open(lock_path, 'a') as lock:
             fcntl.flock(lock, fcntl.LOCK_EX)
             proc = subprocess.Popen([sys.executable, '-B', str(self.ai / 'bin/kukuri-wiki'), 'migrate', 'acme-portal', '--write'],
-                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
             import time
             time.sleep(1.0)                       # migrate はロックの手前で待っている
             self.add('decision', 'B', '2026-03-05', '10:00', wiki=['wiki:acme-portal#x = B'])

@@ -15,6 +15,11 @@ import unicodedata
 import uuid
 from pathlib import Path
 
+for _stream in (sys.stdout, sys.stderr):      # Windows consoles default to a legacy code page
+    if hasattr(_stream, 'reconfigure'):
+        _stream.reconfigure(encoding='utf-8')
+
+
 AI = Path(__file__).resolve().parents[1]
 journal = runpy.run_path(str(Path(__file__).resolve().parent / 'kukuri-journal'))
 KINDS = journal['KINDS']

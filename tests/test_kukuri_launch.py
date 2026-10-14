@@ -34,7 +34,7 @@ class LaunchTests(unittest.TestCase):
 
     def run_launcher(self, name, *args):
         env = dict(os.environ, CODEX_HOME=str(Path(self.temp.name)/'old-codex'), CLAUDE_CONFIG_DIR=str(Path(self.temp.name)/'old-claude'))
-        result = subprocess.run([str(self.root/'bin'/name), *args], cwd=self.temp.name, env=env, capture_output=True, text=True)
+        result = subprocess.run([str(self.root/'bin'/name), *args], cwd=self.temp.name, env=env, capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(result.returncode, 0, result.stderr)
         return json.loads(result.stdout)
 
@@ -60,7 +60,7 @@ class LaunchTests(unittest.TestCase):
     def test_configured_wrapper_is_rejected_before_recursive_execution(self):
         wrapper = self.root/'bin/kukuri-codex'
         (self.root/'runtime/launchers.json').write_text(json.dumps({'codex':str(wrapper)}))
-        result = subprocess.run([str(wrapper), '--check'], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([str(wrapper), '--check'], capture_output=True, text=True, encoding='utf-8', timeout=5)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('recursive', result.stderr.lower())
 
@@ -72,7 +72,7 @@ class LaunchTests(unittest.TestCase):
         body = cli_dir/'codex'
         shutil.copy2(self.tool, body)
         env = dict(os.environ, PATH=str(self.root/'bin')+os.pathsep+str(cli_dir)+os.pathsep+os.environ['PATH'])
-        result = subprocess.run([str(wrapper), '--check'], env=env, capture_output=True, text=True, timeout=5)
+        result = subprocess.run([str(wrapper), '--check'], env=env, capture_output=True, text=True, encoding='utf-8', timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['binary'], str(body))
 
@@ -88,7 +88,7 @@ class LaunchTests(unittest.TestCase):
         body = cli_dir/'codex'
         shutil.copy2(self.tool, body)
         env = dict(os.environ, PATH=str(other/'bin')+os.pathsep+str(cli_dir)+os.pathsep+os.environ['PATH'])
-        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], env=env, capture_output=True, text=True, timeout=5)
+        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], env=env, capture_output=True, text=True, encoding='utf-8', timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
         data = json.loads(result.stdout)
         self.assertEqual(data['binary'], str(body))
@@ -100,7 +100,7 @@ class LaunchTests(unittest.TestCase):
         shutil.copy2(ROOT/'bin/kukuri-launch.py', other/'bin/kukuri-launch.py')
         shutil.copy2(ROOT/'bin/kukuri-codex', other/'bin/codex')
         (self.root/'runtime/launchers.json').write_text(json.dumps({'codex': str(other/'bin/codex')}))
-        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], capture_output=True, text=True, timeout=5)
+        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], capture_output=True, text=True, encoding='utf-8', timeout=5)
         self.assertNotEqual(result.returncode, 0)
         self.assertIn('recursive', result.stderr.lower())
 
@@ -120,7 +120,7 @@ class LaunchTests(unittest.TestCase):
         body = cli_dir/'codex'
         shutil.copy2(self.tool, body)
         env = dict(os.environ, PATH=str(other/'bin')+os.pathsep+str(cli_dir)+os.pathsep+os.environ['PATH'])
-        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], env=env, capture_output=True, text=True, timeout=5)
+        result = subprocess.run([str(self.root/'bin/kukuri-codex'), '--check'], env=env, capture_output=True, text=True, encoding='utf-8', timeout=5)
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(json.loads(result.stdout)['binary'], str(body))
 

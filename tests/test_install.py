@@ -13,7 +13,9 @@ import compat
 
 ROOT = Path(__file__).resolve().parents[1]
 HAS_NODE = shutil.which('node') is not None
-HAS_NPM = shutil.which('npm') is not None
+NPM = shutil.which('npm')
+HAS_NPM = NPM is not None
+NODE = shutil.which('node')
 HAS_CURL = shutil.which('curl') is not None
 
 
@@ -24,7 +26,7 @@ class Base(unittest.TestCase):
         self.base = Path(self.temp.name).resolve()
 
     def run_cmd(self, *args, env=None, ok=True, cwd=None):
-        p = subprocess.run([str(a) for a in args], capture_output=True, text=True, env=env, cwd=cwd or str(self.base))
+        p = subprocess.run([str(a) for a in args], capture_output=True, text=True, encoding='utf-8', env=env, cwd=cwd or str(self.base))
         if ok:
             self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
         else:
@@ -78,31 +80,31 @@ class InstallScriptTests(Base):
 @unittest.skipUnless(HAS_NODE, 'node is required')
 class NodeLauncherTests(Base):
     def test_version_matches_package_json(self):
-        p = self.run_cmd('node', ROOT / 'bin/kukuri-kit.js', '--version')
+        p = self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', '--version')
         self.assertEqual(p.stdout.strip(), json.loads((ROOT / 'package.json').read_text())['version'])
 
     def test_init_repair_and_doctor(self):
         ws = self.base / 'ws'
-        self.run_cmd('node', ROOT / 'bin/kukuri-kit.js', 'init', ws)
+        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'init', ws)
         self.assert_workspace(ws)
         (ws / 'registry/paths.json').unlink()
-        self.run_cmd('node', ROOT / 'bin/kukuri-kit.js', 'repair', ws)
+        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'repair', ws)
         self.assertTrue((ws / 'registry/paths.json').is_file())
-        self.run_cmd('node', ROOT / 'bin/kukuri-kit.js', 'doctor')
+        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'doctor')
 
     def test_unknown_command_and_missing_argument_fail(self):
-        self.run_cmd('node', ROOT / 'bin/kukuri-kit.js', 'nope', ok=False)
-        self.run_cmd('node', ROOT / 'bin/kukuri-kit.js', 'init', ok=False)
+        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'nope', ok=False)
+        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'init', ok=False)
 
     def test_demo_runs(self):
-        self.run_cmd('node', ROOT / 'bin/kukuri-kit.js', 'demo', self.base / 'demo-ws')
+        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'demo', self.base / 'demo-ws')
         self.assertTrue((self.base / 'demo-ws/knowledge/pages/acme-portal.md').is_file())
 
 
 @unittest.skipUnless(HAS_NPM, 'npm is required')
 class PackageTests(Base):
     def test_package_contains_what_is_needed_and_nothing_private(self):
-        p = self.run_cmd('npm', 'pack', '--dry-run', '--json', '--ignore-scripts', cwd=str(ROOT))
+        p = self.run_cmd(NPM, 'pack', '--dry-run', '--json', '--ignore-scripts', cwd=str(ROOT))
         files = {f['path'] for f in json.loads(p.stdout)[0]['files']}
         for needed in ('bin/kukuri-kit.js', 'bin/kukuri-wiki', 'scripts/init-workspace.sh', 'install.sh',
                        'README.md', 'README.ja.md', 'LICENSE', 'rules/common.md', 'examples/demo.sh'):
@@ -116,7 +118,7 @@ class PackageTests(Base):
     def test_packed_tarball_installs_a_workspace(self):
         out = self.base / 'out'
         out.mkdir()
-        p = self.run_cmd('npm', 'pack', '--json', '--ignore-scripts', '--pack-destination', out, cwd=str(ROOT))
+        p = self.run_cmd(NPM, 'pack', '--json', '--ignore-scripts', '--pack-destination', out, cwd=str(ROOT))
         tgz = out / json.loads(p.stdout)[0]['filename']
         extract = self.base / 'pkg'
         extract.mkdir()
@@ -126,7 +128,7 @@ class PackageTests(Base):
             else:
                 tar.extractall(extract)
         ws = self.base / 'ws'
-        self.run_cmd('node', extract / 'package/bin/kukuri-kit.js', 'init', ws)
+        self.run_cmd(NODE, extract / 'package/bin/kukuri-kit.js', 'init', ws)
         self.assert_workspace(ws)
 
 

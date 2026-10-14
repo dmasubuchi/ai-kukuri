@@ -23,7 +23,7 @@ class TasksTests(unittest.TestCase):
              'status':'unconfirmed_after_source_date','evidence':[], 'next_action':'確認する'}]}))
 
     def cli(self, *args, ok=True):
-        run = subprocess.run(['python3','-B',str(self.ai/'bin/kukuri-tasks'),*args],text=True,capture_output=True)
+        run = subprocess.run(['python3','-B',str(self.ai/'bin/kukuri-tasks'),*args],text=True, encoding='utf-8',capture_output=True)
         if ok:
             self.assertEqual(run.returncode,0,run.stderr)
             return json.loads(run.stdout)

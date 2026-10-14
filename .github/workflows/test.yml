@@ -20,6 +20,8 @@ jobs:
           node-version: "20"
       - name: unit tests
         working-directory: tests
+        env:
+          PYTHONUTF8: "1"      # the tests themselves read and write UTF-8 text; the CLIs do not depend on this
         run: python -B -m unittest discover -p "test_*.py" -v
       - name: demo
         run: python -B examples/demo.py

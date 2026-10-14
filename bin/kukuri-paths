@@ -32,6 +32,11 @@ except ImportError:                      # Windows: no fcntl; use a byte lock in
             except OSError:
                 time.sleep(0.05)
 
+for _stream in (sys.stdout, sys.stderr):      # Windows consoles default to a legacy code page
+    if hasattr(_stream, 'reconfigure'):
+        _stream.reconfigure(encoding='utf-8')
+
+
 AI=Path(__file__).resolve().parents[1]
 GOOD={'current','mapped','archived'}
 PARSER_VERSION=2
@@ -41,7 +46,7 @@ def now(): return dt.datetime.now().astimezone().isoformat()
 
 
 def load(path, default=None):
-    try: return json.loads(path.read_text())
+    try: return json.loads(path.read_text(encoding='utf-8'))
     except FileNotFoundError: return default
 
 
@@ -64,7 +69,7 @@ def save(path, value, workspace=None):
     guard(path.parent, workspace)
     path.parent.mkdir(parents=True,exist_ok=True,mode=0o700)
     temp=path.with_name(path.name+'.'+uuid.uuid4().hex+'.tmp')
-    with os.fdopen(os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'w') as f:
+    with os.fdopen(os.open(temp,os.O_WRONLY|os.O_CREAT|os.O_EXCL,0o600),'w',encoding='utf-8') as f:
         json.dump(value,f,ensure_ascii=False,indent=2); f.flush(); os.fsync(f.fileno())
     os.replace(temp,path)
 
@@ -109,7 +114,7 @@ class Resolver:
             self.roots[row['id']]=list(dict.fromkeys(Path(p) for p in roots))
         pointer=load(ai/'knowledge/current.json',{})
         path=ai/pointer.get('run','knowledge/imports/absent')/'manifest.jsonl'
-        self.documents=[json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+        self.documents=[json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()] if path.exists() else []
         for folder in ('pages','journal'):
             for path in sorted((ai/'knowledge'/folder).glob('*.md')):
                 data=path.read_bytes()
@@ -299,7 +304,7 @@ def report(ai):
     unresolved=[r for r in rows if r['status'] not in GOOD|{'template'}]
     recurring=[r for r in unresolved if r['failures']>=3]
     history=state/'history.jsonl'
-    events=[json.loads(line) for line in history.read_text().splitlines()] if history.exists() else []
+    events=[json.loads(line) for line in history.read_text(encoding='utf-8').splitlines()] if history.exists() else []
     return {'latest':latest.get('summary'), 'unique_references':len(rows),'historical_references':historical,
             'unresolved':len(unresolved),'recurring':len(recurring),'statuses':dict(Counter(r['status'] for r in rows)),
             'examples':sorted(unresolved,key=lambda r:(r.get('critical',False),r['failures']),reverse=True)[:15],

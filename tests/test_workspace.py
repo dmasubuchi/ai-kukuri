@@ -28,7 +28,7 @@ class WorkspaceTests(unittest.TestCase):
             cmd = [sys.executable, '-B', str(ROOT / 'examples/demo.py'), *args[1:]]
         else:
             cmd = ['sh', *args]
-        p = subprocess.run(cmd, capture_output=True, text=True, cwd=str(self.base), encoding='utf-8')
+        p = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', cwd=str(self.base), encoding='utf-8')
         if ok:
             self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
         else:
@@ -45,7 +45,7 @@ class WorkspaceTests(unittest.TestCase):
             self.assertTrue((ws / rel).exists(), rel)
         machine = json.loads((ws / 'runtime/machine.json').read_text())
         self.assertEqual(machine['projects_root'], str(ws / 'projects'))
-        listing = subprocess.run(['python3', '-B', str(ws / 'bin/kukuri-tasks'), 'list'], capture_output=True, text=True)
+        listing = subprocess.run(['python3', '-B', str(ws / 'bin/kukuri-tasks'), 'list'], capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(listing.returncode, 0, listing.stderr)
         self.assertEqual(json.loads(listing.stdout)['items'], [])
 
@@ -73,7 +73,7 @@ class WorkspaceTests(unittest.TestCase):
         (ws / 'projects/sample-portal').mkdir(parents=True)
         (ws / 'projects/sample-portal/proof.md').write_text('# proof\n')
         p = subprocess.run(['python3', '-B', str(ws / 'bin/kukuri-paths'), 'resolve', 'project:sample-portal/proof.md'],
-                           capture_output=True, text=True)
+                           capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
         data = json.loads(p.stdout)
         self.assertIn(data['status'], ('current', 'mapped'))
@@ -87,7 +87,7 @@ class WorkspaceTests(unittest.TestCase):
         fake = self.base / 'fake-claude'
         fake.write_text('#!/bin/sh\nexit 0\n'); fake.chmod(0o755)
         (ws / 'runtime/launchers.json').write_text(json.dumps({'claude': str(fake), 'codex': str(fake)}))
-        p = subprocess.run([str(ws / 'bin/kukuri-claude'), '--check'], capture_output=True, text=True)
+        p = subprocess.run([str(ws / 'bin/kukuri-claude'), '--check'], capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(p.returncode, 0, p.stderr)
         options = json.loads(p.stdout)['options']
         mcp = options[options.index('--mcp-config') + 1]
@@ -166,7 +166,7 @@ class WorkspaceTests(unittest.TestCase):
         self.sh(ROOT / 'scripts/init-workspace.sh', ws)
         env = dict(os.environ)
         def run(*a):
-            return subprocess.run(a, cwd=str(ws), capture_output=True, text=True, env=env)
+            return subprocess.run(a, cwd=str(ws), capture_output=True, text=True, encoding='utf-8', env=env)
         self.assertEqual(run('git', 'init', '-q').returncode, 0)
         j = run('python3', '-B', 'bin/kukuri-journal', 'add', '--kind', 'decision', '--text', '架空の決定', '--source', 's',
                 '--author', 'a', '--date', '2026-03-02', '--time', '10:00', '--wiki', 'wiki:acme#k = 値')
@@ -205,7 +205,7 @@ class WorkspaceTests(unittest.TestCase):
                         '--source', 's', '--author', 'a', '--date', '2026-03-02', '--time', '10:00',
                         '--wiki', 'wiki:acme#k = FRESHな現状'], check=True, capture_output=True)
         subprocess.run(['python3', '-B', str(ws / 'bin/kukuri-wiki'), 'apply', '--write'], check=True, capture_output=True)
-        p = subprocess.run(['python3', '-B', str(ws / 'bin/kukuri-memory'), 'search', 'FRESH'], capture_output=True, text=True)
+        p = subprocess.run(['python3', '-B', str(ws / 'bin/kukuri-memory'), 'search', 'FRESH'], capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(p.returncode, 0, p.stderr)
         kinds = {r['category'] for r in json.loads(p.stdout)}
         self.assertEqual(kinds, {'curated-knowledge', 'journal'})
@@ -213,10 +213,10 @@ class WorkspaceTests(unittest.TestCase):
     @unittest.skipIf(compat.IS_WINDOWS, 'POSIX only')
     def test_posix_wrappers_delegate_to_the_python_scripts(self):
         ws = self.base / 'ws'
-        p = subprocess.run(['sh', str(ROOT / 'scripts/init-workspace.sh'), str(ws)], capture_output=True, text=True)
+        p = subprocess.run(['sh', str(ROOT / 'scripts/init-workspace.sh'), str(ws)], capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(p.returncode, 0, p.stderr)
         self.assertIn('workspace ready', p.stdout)
-        d = subprocess.run(['sh', str(ROOT / 'examples/demo.sh'), str(self.base / 'demo')], capture_output=True, text=True)
+        d = subprocess.run(['sh', str(ROOT / 'examples/demo.sh'), str(self.base / 'demo')], capture_output=True, text=True, encoding='utf-8')
         self.assertEqual(d.returncode, 0, d.stderr)
 
 

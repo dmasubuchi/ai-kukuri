@@ -28,6 +28,11 @@ except ImportError:                      # Windows: no fcntl; use a byte lock in
             except OSError:
                 time.sleep(0.05)
 
+for _stream in (sys.stdout, sys.stderr):      # Windows consoles default to a legacy code page
+    if hasattr(_stream, 'reconfigure'):
+        _stream.reconfigure(encoding='utf-8')
+
+
 AI = Path(__file__).resolve().parents[1]
 STATES = {'unconfirmed','active','waiting','blocked','done','cancelled','external'}
 FIELDS = {'title','status','owner','due','customer_id','project_id','next_action','links','system_of_record','evidence'}
@@ -88,10 +93,10 @@ def initial(item, at):
 
 
 def read_state(ai):
-    baseline=json.loads((ai/'tasks/baseline.json').read_text())
+    baseline=json.loads((ai/'tasks/baseline.json').read_text(encoding='utf-8'))
     items={r['id']:r for r in baseline['items']}
     path=ai/'tasks/events.jsonl'
-    events=[json.loads(line) for line in path.read_text().splitlines()] if path.exists() else []
+    events=[json.loads(line) for line in path.read_text(encoding='utf-8').splitlines()] if path.exists() else []
     for event in events:
         item=event['item']; previous=items.get(item['id'])
         if event['operation']=='update':
@@ -121,7 +126,7 @@ def validate(ai, item):
 
 def change(ai, args):
     items,events=read_state(ai)
-    patch=json.loads(Path(args.file).read_text())
+    patch=json.loads(Path(args.file).read_text(encoding='utf-8'))
     if not isinstance(patch,dict) or set(patch)-FIELDS:
         raise ValueError('未対応の更新項目です')
     evidence(ai,patch.get('evidence'))
@@ -172,7 +177,7 @@ def main():
                 data={'created_at':now(),'reviewed_sha256':hashlib.sha256(raw).hexdigest(),
                       'items':[initial(r,reviewed.get('reviewed_at')) for r in reviewed['items']]}
                 temporary=AI/'tasks'/('baseline-'+uuid.uuid4().hex+'.tmp')
-                with temporary.open('x') as f:
+                with temporary.open('x', encoding='utf-8') as f:
                     json.dump(data,f,ensure_ascii=False,indent=2); f.flush(); os.fsync(f.fileno())
                 os.link(temporary,baseline); temporary.unlink()
             result={'baseline':str(baseline),'items':len(read_state(AI)[0])}

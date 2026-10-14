@@ -7,6 +7,11 @@ import shutil
 import sys
 
 
+for _stream in (sys.stdout, sys.stderr):      # Windows consoles default to a legacy code page
+    if hasattr(_stream, 'reconfigure'):
+        _stream.reconfigure(encoding='utf-8')
+
+
 def is_kukuri_wrapper(path):
     """このランチャーのラッパー（他のワークスペースのものを含む）か。製品本体としては使わない。"""
     try:
@@ -29,7 +34,7 @@ def main():
     if product not in ('claude', 'codex'):
         raise ValueError('Unknown CLI')
     local = root/'runtime/launchers.json'
-    settings = json.loads(local.read_text()) if local.exists() else {}
+    settings = json.loads(local.read_text(encoding='utf-8')) if local.exists() else {}
     wrappers = {(root/'bin'/name).resolve() for name in ('claude', 'codex', 'kukuri-claude', 'kukuri-codex')}
     binary = settings.get(product)
     if not binary:
