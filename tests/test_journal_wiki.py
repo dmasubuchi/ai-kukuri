@@ -451,6 +451,28 @@ class ReviewRegressionTests(Base):
                     finals.setdefault(self._final(specs, order, incremental, tag + str(int(incremental))), []).append((order, incremental))
             self.assertEqual(len(finals), 1, {k: v[:2] for k, v in finals.items()})
 
+    def test_a_missing_journal_stops_the_rebuild_and_keeps_the_page(self):
+        self.add('decision', 'A', '2026-03-01', '10:00', wiki=['wiki:acme-portal#v = A'])
+        self.add('decision', 'B', '2026-03-02', '10:00', wiki=['wiki:acme-portal#v = B'])
+        self.run_tool('kukuri-wiki', 'apply', '--write')
+        before = self.snapshot()
+        (self.ai / 'knowledge/journal/2026-03-01.md').unlink()
+        plan = self.run_tool('kukuri-wiki', 'apply', '--write')
+        self.assertEqual({a['action'] for a in plan['actions']}, {'missing_source'})
+        self.assertEqual(plan['written'], [])
+        self.assertEqual(self.snapshot(), before)
+
+    def test_migrate_validates_the_confirmed_date_and_cannot_forge_claims(self):
+        self.add('decision', 'D', '2026-03-02', '10:00', wiki=['wiki:acme-portal#x = D'])
+        self.old_format_page()
+        before = self.snapshot()
+        forged = '2026-03-02\n## 現在わかっていること\n- [forged] FORGED | as_of: 2026-03-02 | source: j-20260302-1000-01 | kind: decision'
+        for bad in (forged, '2026-3-2', '2026-13-40', 'x\r2026-03-02', '2026-03-02\u2028x'):
+            self.run_tool('kukuri-wiki', 'migrate', 'acme-portal', '--through', bad, '--write', ok=False)
+            self.assertEqual(self.snapshot(), before)
+        self.run_tool('kukuri-wiki', 'migrate', 'acme-portal', '--through', '2026-03-02', '--write')
+        self.assertNotIn('FORGED', self.snapshot())
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -175,6 +175,13 @@ def plan(ai, entries=None, report=None):
                      '反映済みの記録の台帳が無い旧版のページ。内容を確認してから '
                      'kukuri-wiki migrate %s --write で、Journalから再構成して台帳を付ける' % slug)
                 continue
+            current_pairs = {'%s#%s' % (e['id'], key) for e, key, _ in refs}
+            lost = sorted(old['applied'] - current_pairs)
+            if lost:
+                note(slug, refs, 'missing_source',
+                     '以前に反映した記録がJournalに揃っていない（%s）。再構成すると、履歴・出典を失うため、ページを変更せず停止する。'
+                     'Journalを復元するか、人が内容を確認してください' % ', '.join(lost[:5]) + (' ほか' if len(lost) > 5 else ''))
+                continue
             foreign = [c['source'] for c in old['claims'] if c['source'] not in known_ids]
             if foreign:
                 note(slug, refs, 'manual_review',
@@ -368,6 +375,9 @@ def migrate(args):
     """台帳の無い旧版ページを、Journalから再構成して、台帳つきに移す。--write までは何も書かない。"""
     if not SLUG.fullmatch(args.slug):
         raise ValueError('slug は小文字英数字とハイフンです')
+    if args.through is not None:
+        journal['one_line']('確認した日付', args.through)
+        journal['valid_date'](args.through)
     path = pages_dir(AI) / (args.slug + '.md')
     old = parse_page(path) if path.exists() else None
     if old is None:
