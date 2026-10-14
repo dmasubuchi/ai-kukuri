@@ -28,7 +28,7 @@ class WorkspaceTests(unittest.TestCase):
             cmd = [sys.executable, '-B', str(ROOT / 'examples/demo.py'), *args[1:]]
         else:
             cmd = ['sh', *args]
-        p = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', cwd=str(self.base), encoding='utf-8')
+        p = subprocess.run(cmd, capture_output=True, text=True, encoding='utf-8', cwd=str(self.base))
         if ok:
             self.assertEqual(p.returncode, 0, p.stderr + p.stdout)
         else:
