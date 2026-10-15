@@ -20,11 +20,25 @@
     "README.md",
     "README.ja.md",
     "LICENSE",
-    "NOTICE.md"
+    "NOTICE.md",
+    "!**/__pycache__",
+    "!**/*.pyc"
   ],
   "engines": {
     "node": ">=16"
   },
-  "keywords": ["ai", "claude-code", "codex", "journal", "wiki", "todo", "knowledge"],
-  "os": ["darwin", "linux", "win32"]
+  "keywords": [
+    "ai",
+    "claude-code",
+    "codex",
+    "journal",
+    "wiki",
+    "todo",
+    "knowledge"
+  ],
+  "os": [
+    "darwin",
+    "linux",
+    "win32"
+  ]
 }

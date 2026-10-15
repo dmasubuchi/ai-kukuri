@@ -104,7 +104,15 @@ class NodeLauncherTests(Base):
 @unittest.skipUnless(HAS_NPM, 'npm is required')
 class PackageTests(Base):
     def test_package_contains_what_is_needed_and_nothing_private(self):
-        p = self.run_cmd(NPM, 'pack', '--dry-run', '--json', '--ignore-scripts', cwd=str(ROOT))
+        import py_compile, shutil           # a compiled cache must never reach the tarball (it embeds local paths)
+        cache = ROOT / 'scripts/__pycache__'
+        existed = cache.exists()
+        py_compile.compile(str(ROOT / 'scripts/init_workspace.py'), doraise=True)
+        try:
+            p = self.run_cmd(NPM, 'pack', '--dry-run', '--json', '--ignore-scripts', cwd=str(ROOT))
+        finally:
+            if not existed:
+                shutil.rmtree(cache, ignore_errors=True)
         files = {f['path'] for f in json.loads(p.stdout)[0]['files']}
         for needed in ('bin/ai-kukuri.js', 'bin/kukuri-wiki', 'scripts/init-workspace.sh', 'install.sh',
                        'README.md', 'README.ja.md', 'LICENSE', 'rules/common.md', 'examples/demo.sh'):
