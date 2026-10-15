@@ -111,6 +111,7 @@ class PackageTests(Base):
             self.assertIn(needed, files)
         for path in files:
             self.assertFalse(path.startswith(('tests/', '.github/', '.git/', 'runtime/', 'knowledge/', 'tasks/')), path)
+            self.assertFalse('__pycache__' in path or path.endswith('.pyc'), 'build artefacts may contain local paths: ' + path)
 
     def test_package_platform_list_includes_every_supported_platform(self):
         platforms = json.loads((ROOT / 'package.json').read_text())['os']
