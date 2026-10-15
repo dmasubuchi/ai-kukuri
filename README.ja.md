@@ -55,9 +55,9 @@ KUKURIは、すべてのAIを支配する存在ではなく、異なるAIの間�
 ### いちばん簡単な方法
 
 ```sh
-# 1. npm（npmへの公開後）。公開前は、GitHubから直接実行できます
+# 1. npm、またはGitHubから直接実行
 npx ai-kukuri init ~/kukuri-workspace
-npx github:<owner>/ai-kukuri init ~/kukuri-workspace
+npx github:dmasubuchi/ai-kukuri init ~/kukuri-workspace
 
 # 2. 取得したリポジトリから
 git clone <このリポジトリ> ai-kukuri && cd ai-kukuri

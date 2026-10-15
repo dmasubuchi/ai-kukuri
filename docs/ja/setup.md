@@ -12,9 +12,9 @@
 ## 導入の方法（どれでも同じワークスペースができます）
 
 ```sh
-# A. npm（npmへの公開後）。公開前は GitHub から直接実行できます
+# A. npm、または GitHub から直接実行
 npx ai-kukuri init ~/kukuri-workspace
-npx github:<owner>/ai-kukuri init ~/kukuri-workspace
+npx github:dmasubuchi/ai-kukuri init ~/kukuri-workspace
 
 # B. 取得したリポジトリから
 git clone <このリポジトリ> ai-kukuri && cd ai-kukuri

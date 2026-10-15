@@ -55,7 +55,7 @@ Requires Python 3.9+. Node.js is only needed for `npx`. Runs on macOS, Linux and
 ```sh
 # 1. npm (once published to npm). Until then, run it straight from GitHub:
 npx ai-kukuri init ~/kukuri-workspace
-npx github:<owner>/ai-kukuri init ~/kukuri-workspace
+npx github:dmasubuchi/ai-kukuri init ~/kukuri-workspace
 
 # 2. From a checkout
 git clone <this repository> ai-kukuri && cd ai-kukuri

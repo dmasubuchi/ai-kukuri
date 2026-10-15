@@ -126,8 +126,10 @@ class PackageTests(Base):
         for needed in ('darwin', 'linux', 'win32'):
             self.assertIn(needed, platforms)
 
-    def test_package_cannot_be_published_by_accident(self):
-        self.assertTrue(json.loads((ROOT / 'package.json').read_text())['private'])
+    def test_package_name_and_no_runtime_dependencies(self):
+        pkg = json.loads((ROOT / 'package.json').read_text())
+        self.assertEqual(pkg['name'], 'ai-kukuri')
+        self.assertNotIn('dependencies', pkg)
 
     def test_packed_tarball_installs_a_workspace(self):
         out = self.base / 'out'

@@ -12,9 +12,9 @@ English | [日本語](ja/setup.md)
 ## Installation methods (all produce the same workspace)
 
 ```sh
-# A. npm (after publication to npm). Before publication you can run it directly from GitHub
+# A. npm, or directly from GitHub
 npx ai-kukuri init ~/kukuri-workspace
-npx github:<owner>/ai-kukuri init ~/kukuri-workspace
+npx github:dmasubuchi/ai-kukuri init ~/kukuri-workspace
 
 # B. From a cloned repository
 git clone <this repository> ai-kukuri && cd ai-kukuri

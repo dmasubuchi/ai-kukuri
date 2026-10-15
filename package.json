@@ -3,7 +3,6 @@
   "version": "0.1.0",
   "description": "ai-kukuri: Journal / Living Wiki / TODO for workspaces shared by several AIs (Claude Code, Codex, ...). Local, standard-library Python.",
   "license": "MIT",
-  "private": true,
   "bin": {
     "ai-kukuri": "bin/ai-kukuri.js"
   },
@@ -40,5 +39,9 @@
     "darwin",
     "linux",
     "win32"
-  ]
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dmasubuchi/ai-kukuri.git"
+  }
 }
