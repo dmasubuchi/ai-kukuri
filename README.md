@@ -53,7 +53,7 @@ An open-source project inspired by Japanese mythology, for "binding" AI, knowled
 Requires Python 3.9+. Node.js is only needed for `npx`. Runs on macOS, Linux and Windows (see [Platform notes](#platform-notes)).
 
 ```sh
-# 1. npm (once published to npm). Until then, run it straight from GitHub:
+# 1. npm, or straight from GitHub:
 npx ai-kukuri init ~/kukuri-workspace
 npx github:dmasubuchi/ai-kukuri init ~/kukuri-workspace
 
