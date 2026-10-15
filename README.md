@@ -79,6 +79,14 @@ Check your environment with `npx ai-kukuri doctor`, or just watch it work with `
 
 The AI itself does not care where it runs; the platform notes above are only about this kit's own scripts (file locks, symlink guards, installer).
 
+## Verify with your real CLIs (manual, once)
+
+The automated tests use a fake CLI. To confirm the real thing on your machine:
+
+1. Run `bin/kukuri-claude` (or `bin/kukuri-codex`) inside the workspace and sign in once; settings stay under `runtime/`.
+2. Ask it to list the available skills. `kukuri-journal-wiki`, `kukuri-recall` and `kukuri-project` should appear.
+3. Check that your usual `~/.claude` / `~/.codex` was not read or modified.
+
 ## First steps
 
 ```sh
