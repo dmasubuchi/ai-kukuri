@@ -5,8 +5,7 @@ English | [日本語](ja/roadmap.md)
 Priority goes first to being able to publish safely.
 
 ## Before publication (required)
-- [ ] Owner finalizes the license (currently an MIT candidate)
-- [ ] Decide distribution terms for the illustrations (declared as GPT-generated) and check the service terms
+- [x] License finalized: MIT (code), CC BY 4.0 (illustration)
 - [ ] Reflect the independent review's findings and re-review
 - [ ] Security check of the full Git history (including verifying the sources of external links in the README and docs)
 - [ ] Confirm installation in a third party's environment (macOS, Linux)
@@ -16,7 +15,6 @@ Priority goes first to being able to publish safely.
 - [ ] Declare the classification rules of `kukuri-memory` in a configuration file (specify `registry/knowledge-categories.json`)
 - [ ] English versions of docs, conventions and Skills (README is primarily English, Japanese is in README.ja.md)
 - [ ] Localisation of the CLI messages and generated page headings, which are currently Japanese
-- [ ] Decide on publication to npm (the public name `kukuri-kit` is unused on the registry; remove `"private": true` when publishing)
 - [ ] Editing rules for Journal records (express corrections by appending)
 
 ## Ideas (not implemented, not decided)

@@ -13,11 +13,11 @@ English | [日本語](ja/setup.md)
 
 ```sh
 # A. npm (after publication to npm). Before publication you can run it directly from GitHub
-npx kukuri-kit init ~/kukuri-workspace
-npx github:<owner>/kukuri-kit init ~/kukuri-workspace
+npx ai-kukuri init ~/kukuri-workspace
+npx github:<owner>/ai-kukuri init ~/kukuri-workspace
 
 # B. From a cloned repository
-git clone <this repository> kukuri-kit && cd kukuri-kit
+git clone <this repository> ai-kukuri && cd ai-kukuri
 ./install.sh ~/kukuri-workspace
 
 # C. Windows (PowerShell), from a checkout
@@ -27,10 +27,9 @@ git clone <this repository> kukuri-kit && cd kukuri-kit
 curl -fsSL <URL of install.sh> | KUKURI_KIT_TARBALL=<archive URL> sh -s -- ~/kukuri-workspace
 ```
 
-- It does not create a workspace in a non-empty location. To add only the missing files, use `npx kukuri-kit repair <dir>` (or `scripts/init-workspace.sh --repair <dir>`). Existing files are not overwritten.
-- Check the environment: `npx kukuri-kit doctor` (python3 3.9 or later, sh, git). Check operation: `npx kukuri-kit demo` (fictional data).
+- It does not create a workspace in a non-empty location. To add only the missing files, use `npx ai-kukuri repair <dir>` (or `scripts/init-workspace.sh --repair <dir>`). Existing files are not overwritten.
+- Check the environment: `npx ai-kukuri doctor` (python3 3.9 or later, sh, git). Check operation: `npx ai-kukuri demo` (fictional data).
 - Commands are **copied** into `bin/` (each command determines the workspace from its own location. Do not turn them into symlinks).
-- `package.json` has `"private": true` for safety before publication (so `npm publish` cannot happen by mistake). The owner decides on publication.
 
 ## Verifying operation (optional)
 

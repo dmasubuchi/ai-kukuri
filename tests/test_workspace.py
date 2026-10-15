@@ -38,7 +38,7 @@ class WorkspaceTests(unittest.TestCase):
     def test_workspace_does_not_get_the_npm_launcher_and_reparse_points_count_as_links(self):
         ws = self.base / 'ws-js'
         self.sh(ROOT / 'scripts/init-workspace.sh', ws)
-        self.assertFalse((ws / 'bin/kukuri-kit.js').exists())
+        self.assertFalse((ws / 'bin/ai-kukuri.js').exists())
         self.assertTrue((ws / 'bin/kukuri-wiki').exists())
         sys.path.insert(0, str(ROOT / 'scripts'))
         try:

@@ -1,4 +1,4 @@
-# Kukuri Kit Common Rules (v0.1)
+# ai-kukuri Common Rules (v0.1)
 
 This file is the canonical source of the workspace's common conventions, independent of any AI product (Claude Code, Codex, etc.). Product-specific settings, credentials, and conversation history are not mixed in here.
 

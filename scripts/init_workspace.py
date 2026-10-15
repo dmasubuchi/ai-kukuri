@@ -47,7 +47,7 @@ def parse(argv):
     return mode, lang, Path(target)
 
 
-WORKSPACE_SKIP = {'kukuri-kit.js'}      # package launcher: needs the npm package files, so it is not copied into a workspace
+WORKSPACE_SKIP = {'ai-kukuri.js'}      # package launcher: needs the npm package files, so it is not copied into a workspace
 
 
 def is_link(path):

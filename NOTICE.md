@@ -1,13 +1,17 @@
 # NOTICE
 
-## 挿絵（docs/images/kukuri-hime.jpg）
+## License scope
 
-- プロジェクトオーナーが提供したイラスト。READMEの挿絵として使用する。
-- 出所: オーナーの申告によれば、ChatGPT（GPT）で生成した画像。このリポジトリでは、申告以上の確認（生成サービスの規約・権利関係）は行っていない。
-- コード（MIT License候補）のライセンスの対象外。再配布・改変の条件は、オーナーが公開前に決める。
-- 元の画像（約3MB）はリポジトリに含めず、長辺1000pxのJPEGに縮小して置いている。
-- 画像の配布条件（ライセンス・帰属表示・再配布の可否）の決定は、Public化前の残件（docs/roadmap.md）。
+- The code, documentation and the Skills written in this repository are licensed under the **MIT License** ([LICENSE](LICENSE)).
+- The illustration `docs/images/kukuri-hime.jpg` is licensed separately under **[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)**. The MIT license of the code does not extend to it, and the image license does not extend to the code.
 
-## 外部コード・データ
+## Illustration (docs/images/kukuri-hime.jpg)
 
-このリポジトリは、外部のソースコード・ライブラリ・Skills・モデルを同梱していない。Pythonの標準ライブラリだけを使う。詳細は docs/security-and-license.md。
+- Content: an illustration of Kukuri-hime (white chrysanthemums, a mirror, a rainbow and a sacred mountain).
+- Provenance: AI-generated with ChatGPT, as declared by the project owner who provided it. The generation service's terms and the absence of third-party input material were declared by the owner; this repository does not hold the generation records.
+- Credit: "ai-kukuri maintainers". When you redistribute the illustration, credit the licensor, link to the CC BY 4.0 license and indicate that it is AI-generated.
+- Modification: the original (about 3 MB) is not included. The distributed file is the original resized to 1000 px on the long side and saved as JPEG.
+
+## External code and data
+
+This repository does not bundle external source code, libraries, Skills or models. It uses only the Python standard library. See [docs/security-and-license.md](docs/security-and-license.md).

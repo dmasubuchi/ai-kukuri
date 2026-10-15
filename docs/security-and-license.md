@@ -2,7 +2,7 @@ English | [日本語](ja/security-and-license.md)
 
 # Security and license review
 
-Status: **pre-publication review in progress** (private candidate). What has been checked and what has not are described separately.
+Status: **reviewed for the first public release.** What has been checked and what has not are described separately.
 
 ## 1. What is not included
 
@@ -27,13 +27,13 @@ Status: **pre-publication review in progress** (private candidate). What has bee
 
 | Subject | Status |
 |---|---|
-| Code and documentation of this repository | MIT License (**candidate**. The owner will finalize it before publication) |
+| Code and documentation of this repository | MIT License (adopted by the owner) |
 | External source code and libraries | **Not bundled**. Only the Python standard library is used (`import` statements checked) |
 | External Skills and plugins | **Not bundled**. The three in `skills/` were written in this repository |
 | Audio generation and radio production | **Not included**, because the terms of use of audio models (characters, voice libraries) must be checked |
-| Illustrations (`docs/images/`) | According to the owner's declaration, images generated with ChatGPT (GPT). Separate from the MIT license of the code ([NOTICE](../NOTICE.md)). Deciding the distribution terms and checking the service terms remain open before going public |
+| Illustrations (`docs/images/`) | AI-generated with ChatGPT (owner's declaration). Licensed under CC BY 4.0, separately from the MIT license of the code ([NOTICE](../NOTICE.md)). Generation records are not held in this repository |
 | External CLIs used at runtime (Claude Code, Codex, Herdr) | Not bundled. Follow each product's terms of use |
-| npm package | No dependencies (no `dependencies`). `private: true` prevents accidental publication |
+| npm package | No dependencies (no `dependencies`). published as `ai-kukuri` |
 
 ### Sources checked
 - README "Origin of the name": an independent review confirmed that the official website of Shirayama Hime Shrine (the "Deities enshrined" section of https://www.shirayama.or.jp/about/) contains an explanation of the two deities' mediation and a religious explanation linking "kukuri" and "kukuru" (to bind). The README does not quote the shrine's text verbatim. The depiction from one version of the Nihon Shoki follows an explanation specified by the owner.
@@ -46,7 +46,7 @@ Status: **pre-publication review in progress** (private candidate). What has bee
 
 - [ ] Secret scan of the full Git history (all commits, all branches, tags)
 - [ ] Reflect the independent review's findings
-- [ ] Finalize the license (owner)
-- [ ] Confirm rights to the illustrations
+- [x] Finalize the license (MIT, owner)
+- [x] Illustration terms decided (CC BY 4.0; owner's declaration)
 - [ ] Install and test in a third-party environment (macOS, Linux)
-- [ ] Decide the owner, name and visibility of the repository to be published
+- [x] Name `ai-kukuri` (npm and repository); visibility public (owner)

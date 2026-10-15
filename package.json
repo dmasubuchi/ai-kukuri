@@ -1,11 +1,11 @@
 {
-  "name": "kukuri-kit",
+  "name": "ai-kukuri",
   "version": "0.1.0",
-  "description": "KUKURI Kit: Journal / Living Wiki / TODO for workspaces shared by several AIs (Claude Code, Codex, ...). Local, standard-library Python.",
+  "description": "ai-kukuri: Journal / Living Wiki / TODO for workspaces shared by several AIs (Claude Code, Codex, ...). Local, standard-library Python.",
   "license": "MIT",
   "private": true,
   "bin": {
-    "kukuri-kit": "bin/kukuri-kit.js"
+    "ai-kukuri": "bin/ai-kukuri.js"
   },
   "files": [
     "bin",

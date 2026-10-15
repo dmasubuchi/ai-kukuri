@@ -1,5 +1,5 @@
 #!/bin/sh
-# One-command installer for KUKURI Kit.
+# One-command installer for ai-kukuri.
 #
 #   ./install.sh [--repair] <workspace-dir>        from a checkout
 #   curl -fsSL <url>/install.sh | KUKURI_KIT_TARBALL=<archive url> sh -s -- <workspace-dir>
@@ -11,7 +11,7 @@
 # Nothing outside <workspace-dir> (and a temporary directory for the download) is written.
 set -eu
 
-fail() { echo "kukuri-kit: $*" >&2; exit 2; }
+fail() { echo "ai-kukuri: $*" >&2; exit 2; }
 
 command -v python3 >/dev/null 2>&1 || fail "python3 is required (3.9 or later)"
 python3 -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' \
@@ -33,7 +33,7 @@ else
   fi
   mkdir "$tmp/src"
   tar -xzf "$tmp/kit.tar.gz" -C "$tmp/src" --strip-components=1 || fail "cannot extract the archive"
-  [ -f "$tmp/src/scripts/init-workspace.sh" ] || fail "the archive is not a KUKURI Kit checkout"
+  [ -f "$tmp/src/scripts/init-workspace.sh" ] || fail "the archive is not a ai-kukuri checkout"
   kit="$tmp/src"
 fi
 

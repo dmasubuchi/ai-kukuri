@@ -4,13 +4,13 @@
 
 <p align="center"><a href="README.md">English</a> ｜ <b>日本語</b></p>
 
-# KUKURI Kit
+# ai-kukuri
 
 **Knowledge Unification Kit for Updates, Recall & Integration**
 
 複数のAI（Claude Code、Codex など）が、日々の仕事を記録し、過去の経緯を保持しながら、現在の知識とTODOを更新するための、小さなローカルツールキットです。外部サービスにも、常駐プロセスにも依存しません（Python 3 の標準ライブラリのみ）。
 
-> 状態: **v0.1 候補（Private・未公開）**。実装済みの機能と将来構想は、[docs/features.md](docs/features.md) で分けています。
+> 状態: **v0.1**。実装済みの機能と将来構想は、[docs/features.md](docs/features.md) で分けています。
 
 ## 名前の由来 — KUKURI（菊理媛神）
 
@@ -34,7 +34,7 @@ KUKURIは、すべてのAIを支配する存在ではなく、異なるAIの間�
 
 *神話の描写は『日本書紀』の一書に基づきます。「括る」との関係は語源の定説ではなく、伝統的な解釈として書いています。白山比咩神社の公式説明（[白山比咩神社「由緒・御祭神」](https://www.shirayama.or.jp/about/)）でも、この結び付けが紹介されています。*
 
-> 挿絵は、プロジェクトオーナーが用意したイラスト（菊理媛神のイメージ）です。コードのライセンス（MIT）の対象に含めません。出所と利用条件は、公開前にオーナーが確認します（[NOTICE](NOTICE.md)）。
+> 挿絵はAIで生成したイラスト（オーナーの申告ではChatGPT）で、コードのMITとは別に CC BY 4.0 で提供します（[NOTICE](NOTICE.md)）。
 
 ## 3つを分ける
 
@@ -56,11 +56,11 @@ KUKURIは、すべてのAIを支配する存在ではなく、異なるAIの間�
 
 ```sh
 # 1. npm（npmへの公開後）。公開前は、GitHubから直接実行できます
-npx kukuri-kit init ~/kukuri-workspace
-npx github:<owner>/kukuri-kit init ~/kukuri-workspace
+npx ai-kukuri init ~/kukuri-workspace
+npx github:<owner>/ai-kukuri init ~/kukuri-workspace
 
 # 2. 取得したリポジトリから
-git clone <このリポジトリ> kukuri-kit && cd kukuri-kit
+git clone <このリポジトリ> ai-kukuri && cd ai-kukuri
 ./install.sh ~/kukuri-workspace
 
 # 3. Windows（PowerShell。取得したリポジトリから）
@@ -70,14 +70,14 @@ git clone <このリポジトリ> kukuri-kit && cd kukuri-kit
 curl -fsSL <install.shのURL> | KUKURI_KIT_TARBALL=<アーカイブのURL> sh -s -- ~/kukuri-workspace
 ```
 
-動作を確かめるだけなら: `npx kukuri-kit demo`（または `sh examples/demo.sh`）。環境の確認は `npx kukuri-kit doctor`。
+動作を確かめるだけなら: `npx ai-kukuri demo`（または `sh examples/demo.sh`）。環境の確認は `npx ai-kukuri doctor`。
 
 ### プラットフォームの注記
 
 | 環境 | 状態 |
 |---|---|
 | macOS・Linux | Python の各コマンド、導入スクリプト、デモ、起動ラッパーを、CI（Python 3.9・3.12）で試験 |
-| Windows | Python の各コマンド、`init_workspace.py`、`install.ps1`、`npx kukuri-kit`、デモを、CI（`windows-latest`、Python 3.9・3.12）で試験。シェルのラッパー（`install.sh`・`kukuri-claude`・`kukuri-codex`）は POSIX 専用で、Windows では `python bin/kukuri-launch.py claude` を使う。シンボリックリンクや POSIX の権限を要する試験は、Windows ではスキップ。実際の Claude Code・Codex での起動は、Windows では未検証 |
+| Windows | Python の各コマンド、`init_workspace.py`、`install.ps1`、`npx ai-kukuri`、デモを、CI（`windows-latest`、Python 3.9・3.12）で試験。シェルのラッパー（`install.sh`・`kukuri-claude`・`kukuri-codex`）は POSIX 専用で、Windows では `python bin/kukuri-launch.py claude` を使う。シンボリックリンクや POSIX の権限を要する試験は、Windows ではスキップ。実際の Claude Code・Codex での起動は、Windows では未検証 |
 
 AI 自体は、どこで動いても同じです。この注記は、このキット自身のスクリプト（ファイルロック、シンボリックリンクの保護、導入スクリプト）についてのものです。
 
@@ -104,7 +104,7 @@ bin/kukuri-wiki check
 ```
 bin/        kukuri-journal  kukuri-wiki  kukuri-tasks  kukuri-memory  kukuri-paths
             kukuri-launch.py  kukuri-claude  kukuri-codex
-install.sh  1コマンドの導入。package.json  npmパッケージ（公開前は private）
+install.sh  1コマンドの導入。package.json  npmパッケージ（npm 公開用）
 rules/      common.md             製品に依存しない共通規約
 skills/     kukuri-journal-wiki  kukuri-recall  kukuri-project
 templates/  AGENTS.md  CLAUDE.md  registry-projects.json  workspace.gitignore
@@ -125,4 +125,4 @@ tests/
 
 ## ライセンス
 
-MIT License（候補）。詳細は [LICENSE](LICENSE) と [docs/security-and-license.md](docs/security-and-license.md)。
+コード・文書は MIT License、挿絵 `docs/images/kukuri-hime.jpg` は CC BY 4.0。詳細は [NOTICE](NOTICE.md)、 [LICENSE](LICENSE) と [docs/security-and-license.md](docs/security-and-license.md)。

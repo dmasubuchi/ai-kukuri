@@ -60,7 +60,7 @@ class InstallScriptTests(Base):
         shutil.copytree(ROOT, src, ignore=shutil.ignore_patterns('.git', '__pycache__', 'node_modules'))
         archive = self.base / 'kit.tar.gz'
         with tarfile.open(archive, 'w:gz') as tar:
-            tar.add(src, arcname='kukuri-kit-main')
+            tar.add(src, arcname='ai-kukuri-main')
         script = self.base / 'install.sh'                    # simulate `curl ... | sh`: no checkout beside the script
         shutil.copy(ROOT / 'install.sh', script)
         digest = hashlib.sha256(archive.read_bytes()).hexdigest()
@@ -80,24 +80,24 @@ class InstallScriptTests(Base):
 @unittest.skipUnless(HAS_NODE, 'node is required')
 class NodeLauncherTests(Base):
     def test_version_matches_package_json(self):
-        p = self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', '--version')
+        p = self.run_cmd(NODE, ROOT / 'bin/ai-kukuri.js', '--version')
         self.assertEqual(p.stdout.strip(), json.loads((ROOT / 'package.json').read_text())['version'])
 
     def test_init_repair_and_doctor(self):
         ws = self.base / 'ws'
-        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'init', ws)
+        self.run_cmd(NODE, ROOT / 'bin/ai-kukuri.js', 'init', ws)
         self.assert_workspace(ws)
         (ws / 'registry/paths.json').unlink()
-        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'repair', ws)
+        self.run_cmd(NODE, ROOT / 'bin/ai-kukuri.js', 'repair', ws)
         self.assertTrue((ws / 'registry/paths.json').is_file())
-        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'doctor')
+        self.run_cmd(NODE, ROOT / 'bin/ai-kukuri.js', 'doctor')
 
     def test_unknown_command_and_missing_argument_fail(self):
-        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'nope', ok=False)
-        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'init', ok=False)
+        self.run_cmd(NODE, ROOT / 'bin/ai-kukuri.js', 'nope', ok=False)
+        self.run_cmd(NODE, ROOT / 'bin/ai-kukuri.js', 'init', ok=False)
 
     def test_demo_runs(self):
-        self.run_cmd(NODE, ROOT / 'bin/kukuri-kit.js', 'demo', self.base / 'demo-ws')
+        self.run_cmd(NODE, ROOT / 'bin/ai-kukuri.js', 'demo', self.base / 'demo-ws')
         self.assertTrue((self.base / 'demo-ws/knowledge/pages/acme-portal.md').is_file())
 
 
@@ -106,7 +106,7 @@ class PackageTests(Base):
     def test_package_contains_what_is_needed_and_nothing_private(self):
         p = self.run_cmd(NPM, 'pack', '--dry-run', '--json', '--ignore-scripts', cwd=str(ROOT))
         files = {f['path'] for f in json.loads(p.stdout)[0]['files']}
-        for needed in ('bin/kukuri-kit.js', 'bin/kukuri-wiki', 'scripts/init-workspace.sh', 'install.sh',
+        for needed in ('bin/ai-kukuri.js', 'bin/kukuri-wiki', 'scripts/init-workspace.sh', 'install.sh',
                        'README.md', 'README.ja.md', 'LICENSE', 'rules/common.md', 'examples/demo.sh'):
             self.assertIn(needed, files)
         for path in files:
@@ -133,7 +133,7 @@ class PackageTests(Base):
             else:
                 tar.extractall(extract)
         ws = self.base / 'ws'
-        self.run_cmd(NODE, extract / 'package/bin/kukuri-kit.js', 'init', ws)
+        self.run_cmd(NODE, extract / 'package/bin/ai-kukuri.js', 'init', ws)
         self.assert_workspace(ws)
 
 
@@ -143,7 +143,7 @@ class ReadmeNavigationTests(unittest.TestCase):
         ja = (ROOT / 'README.ja.md').read_text(encoding='utf-8')
         self.assertIn('README.ja.md', en)
         self.assertIn('README.md', ja)
-        head = en.split('# KUKURI Kit')[0]
+        head = en.split('# ai-kukuri')[0]
         self.assertIn('English', head)
         # the English README body is English: kana (hiragana/katakana) only inside the quoted Japanese terms
         body = en.split('## Install')[1].split('## License')[0]

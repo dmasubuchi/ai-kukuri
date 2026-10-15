@@ -6,7 +6,7 @@ English | [日本語](ja/features.md)
 |---|---|---|
 | Common conventions, project ledger, entry-point templates (`rules/` `templates/`) | Implemented | Tests of `init-workspace.sh` |
 | Workspace creation (`scripts/init-workspace.sh`, `--repair`) | Implemented | Tests and CI (macOS/Linux) |
-| Entry points: `install.sh` (checkout / archive URL + SHA-256), npm package `kukuri-kit` (`npx kukuri-kit init/repair/demo/doctor`) | Implemented. **Not published to npm** (`private: true`) | Tests (including the `npm pack` contents and installation from the unpacked package) |
+| Entry points: `install.sh` (checkout / archive URL + SHA-256), npm package `ai-kukuri` (`npx ai-kukuri init/repair/demo/doctor`) | Implemented. Published to npm as `ai-kukuri` | Tests (including the `npm pack` contents and installation from the unpacked package) |
 | Journal (`kukuri-journal`): append, kind/source/timestamp, listing, preserving copies of evidence | Implemented | Unit tests |
 | Living Wiki (`kukuri-wiki`): plan/apply/show/check, handling of conflicts, idempotency | Implemented | Unit tests and demo |
 | TODO (`kukuri-tasks`): baseline + append-only history, evidence verification, version-conflict detection | Implemented | Unit tests |

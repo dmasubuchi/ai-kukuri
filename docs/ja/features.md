@@ -6,7 +6,7 @@
 |---|---|---|
 | 共通規約・案件台帳・入口テンプレート（`rules/` `templates/`） | 実装済み | `init-workspace.sh` の試験 |
 | ワークスペースの作成（`scripts/init-workspace.sh`、`--repair`） | 実装済み | 試験・CI（macOS/Linux） |
-| 導入口: `install.sh`（チェックアウト／アーカイブURL＋SHA-256）、npmパッケージ `kukuri-kit`（`npx kukuri-kit init/repair/demo/doctor`） | 実装済み。**npmへは未公開**（`private: true`） | 試験（`npm pack` の内容・展開した包での導入を含む） |
+| 導入口: `install.sh`（チェックアウト／アーカイブURL＋SHA-256）、npmパッケージ `ai-kukuri`（`npx ai-kukuri init/repair/demo/doctor`） | 実装済み。npm に `ai-kukuri` として公開 | 試験（`npm pack` の内容・展開した包での導入を含む） |
 | Journal（`kukuri-journal`）: 追記、種類・出典・時刻、一覧、根拠の写しの保全 | 実装済み | 単体試験 |
 | Living Wiki（`kukuri-wiki`）: plan/apply/show/check、矛盾の扱い、冪等性 | 実装済み | 単体試験・demo |
 | TODO（`kukuri-tasks`）: 基準＋追記履歴、根拠検証、版の競合検知 | 実装済み | 単体試験 |

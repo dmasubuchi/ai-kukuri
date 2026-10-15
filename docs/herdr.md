@@ -2,7 +2,7 @@ English | [日本語](ja/herdr.md)
 
 # Using with Herdr
 
-KUKURI Kit does not reimplement Herdr's features. Herdr is a terminal workspace that runs multiple AI agents. This page describes the approach to using them together and how to verify the commands involved. There is no dedicated tool in v0.1 ([features](features.md)).
+ai-kukuri does not reimplement Herdr's features. Herdr is a terminal workspace that runs multiple AI agents. This page describes the approach to using them together and how to verify the commands involved. There is no dedicated tool in v0.1 ([features](features.md)).
 
 ## Approach
 

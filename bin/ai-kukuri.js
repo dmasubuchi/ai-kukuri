@@ -1,19 +1,19 @@
 #!/usr/bin/env node
 'use strict';
-// Thin launcher for `npx kukuri-kit ...`. All real work is done by the shell/Python scripts.
+// Thin launcher for `npx ai-kukuri ...`. All real work is done by the shell/Python scripts.
 const { spawnSync } = require('child_process');
 const path = require('path');
 const root = path.resolve(__dirname, '..');
 const pkg = require(path.join(root, 'package.json'));
 
-const usage = `kukuri-kit ${pkg.version}
+const usage = `ai-kukuri ${pkg.version}
 
 Usage:
-  kukuri-kit init <dir> [--lang en|ja]    create a workspace (the directory must not exist or be empty)
-  kukuri-kit repair <dir> [--lang en|ja]  add only the files that are missing; never overwrites
-  kukuri-kit demo [dir]      run the fictional-data demo (Journal -> Wiki -> TODO)
-  kukuri-kit doctor          check python (3.9+) and git
-  kukuri-kit --version
+  ai-kukuri init <dir> [--lang en|ja]    create a workspace (the directory must not exist or be empty)
+  ai-kukuri repair <dir> [--lang en|ja]  add only the files that are missing; never overwrites
+  ai-kukuri demo [dir]      run the fictional-data demo (Journal -> Wiki -> TODO)
+  ai-kukuri doctor          check python (3.9+) and git
+  ai-kukuri --version
 `;
 
 function pythonCommand() {
@@ -26,7 +26,7 @@ function pythonCommand() {
 
 function run(cmd, args) {
   const r = spawnSync(cmd, args, { stdio: 'inherit' });
-  if (r.error) { console.error('kukuri-kit: ' + r.error.message); return 127; }
+  if (r.error) { console.error('ai-kukuri: ' + r.error.message); return 127; }
   return r.status === null ? 1 : r.status;
 }
 
@@ -48,7 +48,7 @@ function doctor() {
 const [cmd, ...rest] = process.argv.slice(2);
 const python = pythonCommand();
 if (!python && cmd !== '--version' && cmd !== '-v' && cmd !== '--help' && cmd !== '-h' && cmd !== undefined && cmd !== 'doctor') {
-  console.error('kukuri-kit: Python 3.9 or later is required');
+  console.error('ai-kukuri: Python 3.9 or later is required');
   process.exit(2);
 }
 switch (cmd) {
@@ -73,6 +73,6 @@ switch (cmd) {
     console.log(usage);
     process.exit(cmd === undefined ? 2 : 0);
   default:
-    console.error('kukuri-kit: unknown command: ' + cmd + '\n\n' + usage);
+    console.error('ai-kukuri: unknown command: ' + cmd + '\n\n' + usage);
     process.exit(2);
 }

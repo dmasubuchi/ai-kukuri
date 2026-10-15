@@ -13,21 +13,20 @@
 
 ```sh
 # A. npm（npmへの公開後）。公開前は GitHub から直接実行できます
-npx kukuri-kit init ~/kukuri-workspace
-npx github:<owner>/kukuri-kit init ~/kukuri-workspace
+npx ai-kukuri init ~/kukuri-workspace
+npx github:<owner>/ai-kukuri init ~/kukuri-workspace
 
 # B. 取得したリポジトリから
-git clone <このリポジトリ> kukuri-kit && cd kukuri-kit
+git clone <このリポジトリ> ai-kukuri && cd ai-kukuri
 ./install.sh ~/kukuri-workspace
 
 # C. 1行（アーカイブのURLを指定。KUKURI_KIT_SHA256 を付けると、一致しないとき中止します）
 curl -fsSL <install.shのURL> | KUKURI_KIT_TARBALL=<アーカイブのURL> sh -s -- ~/kukuri-workspace
 ```
 
-- 空でない場所には作成しません。足りないファイルだけを足すには、`npx kukuri-kit repair <dir>`（または `scripts/init-workspace.sh --repair <dir>`）。既存のファイルは上書きしません。
-- 環境の確認: `npx kukuri-kit doctor`（python3 3.9以上、sh、git）。動作の確認: `npx kukuri-kit demo`（架空データ）。
+- 空でない場所には作成しません。足りないファイルだけを足すには、`npx ai-kukuri repair <dir>`（または `scripts/init-workspace.sh --repair <dir>`）。既存のファイルは上書きしません。
+- 環境の確認: `npx ai-kukuri doctor`（python3 3.9以上、sh、git）。動作の確認: `npx ai-kukuri demo`（架空データ）。
 - コマンドは `bin/` に **コピー** されます（各コマンドは、自分の場所からワークスペースを決めます。シンボリックリンクにしないでください）。
-- `package.json` は、公開前の安全のため `"private": true` です（誤って `npm publish` されません）。公開の判断は、所有者が行います。
 
 ## 動作を確かめる（任意）
 

@@ -4,13 +4,13 @@
 
 <p align="center"><b>English</b> | <a href="README.ja.md">日本語</a></p>
 
-# KUKURI Kit
+# ai-kukuri
 
 **Knowledge Unification Kit for Updates, Recall & Integration**
 
 A small, local toolkit that lets several AIs (Claude Code, Codex and others) record their daily work, keep the history of how things came to be, and update current knowledge and TODOs from it, with sources. No services, no daemon: Python 3 standard library and plain files only.
 
-> Status: **v0.1 candidate (private, not published)**. What is implemented and what is only an idea are listed separately in [docs/features.md](docs/features.md).
+> Status: **v0.1**. What is implemented and what is only an idea are listed separately in [docs/features.md](docs/features.md).
 
 ## The name — KUKURI (Kukuri-hime-no-kami)
 
@@ -34,7 +34,7 @@ An open-source project inspired by Japanese mythology, for "binding" AI, knowled
 
 *The myth follows a variant account of the Nihon Shoki. The link with "kukuru" is a traditional interpretation, not an established etymology; the official explanation of Shirayama-hime Shrine also presents this connection ([Shirayama-hime Shrine: about / enshrined deities](https://www.shirayama.or.jp/about/), Japanese).*
 
-> The illustration was provided by the project owner (declared as generated with ChatGPT). It is not covered by the code license; see [NOTICE.md](NOTICE.md).
+> The illustration is AI-generated (ChatGPT, as declared by the project owner) and is licensed separately under CC BY 4.0; see [NOTICE.md](NOTICE.md).
 
 ## Three things, kept apart
 
@@ -54,11 +54,11 @@ Requires Python 3.9+. Node.js is only needed for `npx`. Runs on macOS, Linux and
 
 ```sh
 # 1. npm (once published to npm). Until then, run it straight from GitHub:
-npx kukuri-kit init ~/kukuri-workspace
-npx github:<owner>/kukuri-kit init ~/kukuri-workspace
+npx ai-kukuri init ~/kukuri-workspace
+npx github:<owner>/ai-kukuri init ~/kukuri-workspace
 
 # 2. From a checkout
-git clone <this repository> kukuri-kit && cd kukuri-kit
+git clone <this repository> ai-kukuri && cd ai-kukuri
 ./install.sh ~/kukuri-workspace
 
 # 3. Windows (PowerShell), from a checkout
@@ -68,14 +68,14 @@ git clone <this repository> kukuri-kit && cd kukuri-kit
 curl -fsSL <URL of install.sh> | KUKURI_KIT_TARBALL=<URL of the archive> sh -s -- ~/kukuri-workspace
 ```
 
-Check your environment with `npx kukuri-kit doctor`, or just watch it work with `npx kukuri-kit demo` (fictional data only).
+Check your environment with `npx ai-kukuri doctor`, or just watch it work with `npx ai-kukuri demo` (fictional data only).
 
 ## Platform notes
 
 | Platform | Status |
 |---|---|
 | macOS, Linux | The Python CLIs, the installer, the demo and the launcher wrappers are tested in CI (Python 3.9 and 3.12). |
-| Windows | The Python CLIs, `init_workspace.py`, `install.ps1`, `npx kukuri-kit` and the demo are tested in CI on `windows-latest` (Python 3.9 and 3.12). The shell wrappers (`install.sh`, `kukuri-claude`, `kukuri-codex`) are POSIX only; on Windows run `python bin/kukuri-launch.py claude` instead. Tests that need symlinks or POSIX permissions are skipped there. The launcher has not been run against the real Claude Code or Codex on Windows. |
+| Windows | The Python CLIs, `init_workspace.py`, `install.ps1`, `npx ai-kukuri` and the demo are tested in CI on `windows-latest` (Python 3.9 and 3.12). The shell wrappers (`install.sh`, `kukuri-claude`, `kukuri-codex`) are POSIX only; on Windows run `python bin/kukuri-launch.py claude` instead. Tests that need symlinks or POSIX permissions are skipped there. The launcher has not been run against the real Claude Code or Codex on Windows. |
 
 The AI itself does not care where it runs; the platform notes above are only about this kit's own scripts (file locks, symlink guards, installer).
 
@@ -102,7 +102,7 @@ Run the tests from the repository root (a subshell, so your working directory do
 ```
 bin/        kukuri-journal  kukuri-wiki  kukuri-tasks  kukuri-memory  kukuri-paths
             kukuri-launch.py  kukuri-claude  kukuri-codex
-            (bin/kukuri-kit.js is the npm package launcher only; it is not copied into a workspace)
+            (bin/ai-kukuri.js is the npm package launcher only; it is not copied into a workspace)
 rules/      common.md             the shared, product-independent rules
 skills/     kukuri-journal-wiki  kukuri-recall  kukuri-project
 templates/  AGENTS.md  CLAUDE.md  registry-projects.json  ...
@@ -111,7 +111,7 @@ scripts/    init_workspace.py (portable)  init-workspace.sh (wrapper)
 examples/   demo.py (portable)  demo.sh (wrapper)
 docs/       architecture.md  features.md  setup.md  herdr.md  security-and-license.md  roadmap.md
 docs/ja/    the same documents in Japanese
-install.sh  install.ps1  package.json (npm package, private)
+install.sh  install.ps1  package.json (npm package)
 tests/
 ```
 
@@ -127,4 +127,4 @@ The documentation, rules, skills and entry files are English by default; Japanes
 
 ## License
 
-MIT License (candidate; to be confirmed by the owner before any public release). See [LICENSE](LICENSE) and [docs/security-and-license.md](docs/security-and-license.md).
+Code and documentation: MIT License. The illustration `docs/images/kukuri-hime.jpg`: CC BY 4.0. See [NOTICE.md](NOTICE.md), [LICENSE](LICENSE) and [docs/security-and-license.md](docs/security-and-license.md).
